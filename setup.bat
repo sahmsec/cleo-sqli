@@ -7,8 +7,8 @@ set "bat_dir=%~dp0"
 set "folder=%bat_dir%cleo-sqli"
 set "winrar_url=https://www.win-rar.com/fileadmin/winrar-versions/winrar/winrar-x64-624.exe"
 set "winrar_installer=!folder!\WinRAR-free.exe"
-set "cleo-sqli_url=https://github.com/sahmsec/cleo-sqli/releases/download/v1.0/cleo-sqliPortable.zip"
-set "cleo-sqli_zip=!folder!\cleo-sqli.zip"
+set "cleo-sqli_url=https://github.com/sahmsec/cleo-sqli/releases/download/v1.2/cleo.zip"
+set "cleo-sqli_zip=!folder!\cleo.zip"
 set "password=aws"
 
 :: Header
@@ -28,7 +28,7 @@ if %errorLevel% neq 0 (
 :: User confirmation
 
 
-:: Create cleo-sqli Portable folder if it doesn't exist
+:: Create cleo-sqli  folder if it doesn't exist
 if not exist "!folder!\" (
     mkdir "!folder!"
     echo [SUCCESS] Created workspace: !folder!
