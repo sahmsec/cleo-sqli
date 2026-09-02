@@ -25,12 +25,12 @@ Choose the file that matches your device. Every button always points to the late
 
 | Platform | Device | Download |
 |:--|:--|:--:|
-| Windows | 64-bit Intel/AMD | [![Download Windows](https://img.shields.io/badge/Download-Windows_x64-0078D4?style=for-the-badge&logo=windows11&logoColor=white)](https://github.com/sahmsec/cleo-sqli/releases/latest/download/Cleo-Windows-x64.zip) |
-| macOS | Apple Silicon (M1, M2, M3, M4, or newer) | [![Download macOS](https://img.shields.io/badge/Download-macOS_ARM64-111111?style=for-the-badge&logo=apple&logoColor=white)](https://github.com/sahmsec/cleo-sqli/releases/latest/download/Cleo-macOS-Apple-Silicon.dmg) |
-| Linux | 64-bit Intel/AMD | [![Download Linux x64](https://img.shields.io/badge/Download-Linux_x64-FCC624?style=for-the-badge&logo=linux&logoColor=111111)](https://github.com/sahmsec/cleo-sqli/releases/latest/download/Cleo-Linux-x64.tar.gz) |
-| Linux | ARM64 | [![Download Linux ARM64](https://img.shields.io/badge/Download-Linux_ARM64-FCC624?style=for-the-badge&logo=linux&logoColor=111111)](https://github.com/sahmsec/cleo-sqli/releases/latest/download/Cleo-Linux-arm64.tar.gz) |
-| Chromebook | Intel/AMD Linux environment | [![Download Chromebook x64](https://img.shields.io/badge/Download-Chromebook_x64-4285F4?style=for-the-badge&logo=googlechrome&logoColor=white)](https://github.com/sahmsec/cleo-sqli/releases/latest/download/Cleo-Chromebook-x64.deb) |
-| Chromebook | ARM Linux environment | [![Download Chromebook ARM64](https://img.shields.io/badge/Download-Chromebook_ARM64-4285F4?style=for-the-badge&logo=googlechrome&logoColor=white)](https://github.com/sahmsec/cleo-sqli/releases/latest/download/Cleo-Chromebook-arm64.deb) |
+| Windows | 64-bit Intel/AMD | <a href="https://github.com/sahmsec/cleo-sqli/releases/latest/download/Cleo-Windows-x64.zip"><img src="https://img.shields.io/badge/Download-Windows_x64-0078D4?style=for-the-badge&logo=windows11&logoColor=white" alt="Download Windows x64" width="310" height="32"></a> |
+| macOS | Apple Silicon (M1, M2, M3, M4, or newer) | <a href="https://github.com/sahmsec/cleo-sqli/releases/latest/download/Cleo-macOS-Apple-Silicon.dmg"><img src="https://img.shields.io/badge/Download-macOS_ARM64-111111?style=for-the-badge&logo=apple&logoColor=white" alt="Download macOS ARM64" width="310" height="32"></a> |
+| Linux | 64-bit Intel/AMD | <a href="https://github.com/sahmsec/cleo-sqli/releases/latest/download/Cleo-Linux-x64.tar.gz"><img src="https://img.shields.io/badge/Download-Linux_x64-FCC624?style=for-the-badge&logo=linux&logoColor=111111" alt="Download Linux x64" width="310" height="32"></a> |
+| Linux | ARM64 | <a href="https://github.com/sahmsec/cleo-sqli/releases/latest/download/Cleo-Linux-arm64.tar.gz"><img src="https://img.shields.io/badge/Download-Linux_ARM64-FCC624?style=for-the-badge&logo=linux&logoColor=111111" alt="Download Linux ARM64" width="310" height="32"></a> |
+| Chromebook | Intel/AMD Linux environment | <a href="https://github.com/sahmsec/cleo-sqli/releases/latest/download/Cleo-Chromebook-x64.deb"><img src="https://img.shields.io/badge/Download-Chromebook_x64-4285F4?style=for-the-badge&logo=googlechrome&logoColor=white" alt="Download Chromebook x64" width="310" height="32"></a> |
+| Chromebook | ARM Linux environment | <a href="https://github.com/sahmsec/cleo-sqli/releases/latest/download/Cleo-Chromebook-arm64.deb"><img src="https://img.shields.io/badge/Download-Chromebook_ARM64-4285F4?style=for-the-badge&logo=googlechrome&logoColor=white" alt="Download Chromebook ARM64" width="310" height="32"></a> |
 
 You can also open the [latest release page](https://github.com/sahmsec/cleo-sqli/releases/latest)
 to see every download and its checksum file.
