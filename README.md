@@ -76,6 +76,12 @@ If a download or installation fails, open an
 [issue](https://github.com/sahmsec/cleo-sqli/issues) and include your operating system,
 processor type, and the exact error message.
 
+## License
+
+Cleo is free to use for personal learning, classroom instruction, and explicitly
+authorized security testing. The application is distributed under the
+[Cleo Educational Binary License](LICENSE.md); it is not open-source software.
+
 ---
 
 <p align="center"><sub>Cleo is intended for authorized security education and testing only.</sub></p>
