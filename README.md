@@ -19,9 +19,10 @@
 This repository is the official **binary distribution** for Cleo. The downloads are
 self-contained, so students do not need to install .NET or build anything from source.
 
-## Download
+## Download Cleo
 
-Choose the file that matches your device. Every button always points to the latest release.
+Choose the build that matches your device. Every button points directly to the latest
+release—no account or extra runtime is required.
 
 | Platform | Device | Binary type | Download |
 |:--|:--|:--:|:--:|
@@ -35,94 +36,39 @@ Choose the file that matches your device. Every button always points to the late
 You can also open the [latest release page](https://github.com/sahmsec/cleo-sqli/releases/latest)
 to see every download and its checksum file.
 
-## Install from a terminal
+## Install
 
-### Windows 10 or 11 (x64)
+| Platform | What to do |
+|:--|:--|
+| **Windows** | Download the ZIP, choose **Extract All**, open the extracted folder, and double-click `Cleo.exe`. |
+| **macOS** | Open the DMG and drag **Cleo** into **Applications**. This build supports Apple Silicon Macs. |
+| **Linux** | Extract the `.tar.gz`, allow the `Cleo` file to run as a program in its file properties, then open it. |
+| **Chromebook** | Enable **Linux development environment**, download the correct `.deb`, double-click it, and choose **Install with Linux**. |
 
-Open **PowerShell**, then run:
+> [!NOTE]
+> Windows may show a SmartScreen message because the app is not commercially code-signed.
+> On macOS, use **System Settings → Privacy & Security → Open Anyway** if the first launch
+> is blocked. These warnings are expected for the free classroom builds.
 
-```powershell
-$url = "https://github.com/sahmsec/cleo-sqli/releases/latest/download/Cleo-Windows-x64.zip"
-Invoke-WebRequest -Uri $url -OutFile "Cleo-Windows-x64.zip"
-Expand-Archive ".\Cleo-Windows-x64.zip" -DestinationPath ".\Cleo" -Force
-Start-Process ".\Cleo\Cleo.exe"
-```
+## How to use Cleo
 
-You can move the extracted `Cleo` folder anywhere you like. Windows may show a
-SmartScreen message on first launch because this free classroom build is not
-commercially code-signed.
+<p align="center">
+  <strong>Target</strong> &nbsp;→&nbsp; <strong>Scan</strong> &nbsp;→&nbsp;
+  <strong>Tables</strong> &nbsp;→&nbsp; <strong>Columns</strong> &nbsp;→&nbsp; <strong>Data</strong>
+</p>
 
-### macOS (Apple Silicon)
+1. Paste the URL of an **authorized practice target** into the target field.
+2. Click <kbd>Load Target</kbd>, then <kbd>Start Scan</kbd> and wait for the scan to finish.
+3. Click <kbd>Get Tables</kbd> to discover the database structure shown in the left sidebar.
+4. Open a table and click <kbd>Get Columns</kbd> to load its available columns.
+5. Select up to **six columns**, then click <kbd>Get Data</kbd>.
+6. Review the extracted rows in the main output table. Use **Save Results** or **Export Data**
+   when you want to keep them.
 
-This build supports Apple Silicon Macs. Check yours with `uname -m`; it should print `arm64`.
-
-```bash
-curl -fL "https://github.com/sahmsec/cleo-sqli/releases/latest/download/Cleo-macOS-Apple-Silicon.dmg" -o Cleo.dmg
-open Cleo.dmg
-```
-
-Drag **Cleo** into **Applications**. On the first launch, macOS may block the app because it
-is not notarized with a paid Apple Developer account. Open **System Settings → Privacy &
-Security**, find the Cleo message, and click **Open Anyway**. You only need to do this once.
-
-### Linux (x64 or ARM64)
-
-This command detects the processor, downloads the correct package, and starts Cleo:
-
-```bash
-case "$(uname -m)" in
-  x86_64)        file="Cleo-Linux-x64.tar.gz" ;;
-  aarch64|arm64) file="Cleo-Linux-arm64.tar.gz" ;;
-  *) echo "Unsupported processor: $(uname -m)"; exit 1 ;;
-esac
-
-curl -fL "https://github.com/sahmsec/cleo-sqli/releases/latest/download/$file" -o "$file"
-mkdir -p "$HOME/.local/opt/cleo"
-tar -xzf "$file" -C "$HOME/.local/opt/cleo"
-chmod +x "$HOME/.local/opt/cleo/Cleo"
-"$HOME/.local/opt/cleo/Cleo"
-```
-
-If your Linux distribution reports a missing desktop library, install its packages for
-X11, ICE, SM, Fontconfig, and CA certificates through your normal package manager.
-
-### Chromebook (Linux environment)
-
-First enable **Settings → About ChromeOS → Developers → Linux development environment**.
-Then open the Linux Terminal and run:
-
-```bash
-case "$(dpkg --print-architecture)" in
-  amd64) file="Cleo-Chromebook-x64.deb" ;;
-  arm64) file="Cleo-Chromebook-arm64.deb" ;;
-  *) echo "Unsupported processor: $(dpkg --print-architecture)"; exit 1 ;;
-esac
-
-curl -fL "https://github.com/sahmsec/cleo-sqli/releases/latest/download/$file" -o "$file"
-sudo apt install "./$file"
-cleo
-```
-
-After installation, Cleo also appears in the Chromebook Linux apps menu.
-
-## Verify a download
-
-Each release includes `SHA256SUMS.txt`. Download it from the
-[latest release page](https://github.com/sahmsec/cleo-sqli/releases/latest), then compare the
-listed checksum with your file.
-
-Windows PowerShell:
-
-```powershell
-Get-FileHash ".\Cleo-Windows-x64.zip" -Algorithm SHA256
-```
-
-macOS or Linux:
-
-```bash
-shasum -a 256 Cleo-macOS-Apple-Silicon.dmg   # macOS
-sha256sum Cleo-Linux-x64.tar.gz              # Linux example
-```
+> [!TIP]
+> Discovered tables and columns stay available during the current session. You can collapse
+> and reopen them without running the same step again. Use **Clean All** when you want to
+> reset the workspace and begin with a different target.
 
 ## Support
 
