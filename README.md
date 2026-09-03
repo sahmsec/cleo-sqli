@@ -33,10 +33,11 @@ guided installer selects the correct supported architecture and verifies the dow
 
 Every button points to the latest release. Only the current version remains publicly listed;
 previous versions are retained as drafts so they cannot be mistaken for the recommended download.
-Their release pages and uploaded app binaries are hidden from ordinary public readers and visible
-only to repository maintainers and collaborators with push access. The public Git tags and
-automatically generated repository source snapshots remain available, but old app binaries and
-pinned release-download URLs do not. If you are uncertain, use the guide above instead of guessing.
+Their draft release records, release notes, and uploaded app binaries are hidden from ordinary
+public readers and visible only to repository maintainers and collaborators with push access. The
+public Git tag pages and automatically generated repository source snapshots remain available, but
+old app binaries and pinned release-download URLs do not. If you are uncertain, use the guide above
+instead of guessing.
 
 | Platform | Supported device | Package | Download |
 |:--|:--|:--:|:--:|
