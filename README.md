@@ -16,39 +16,53 @@
 > [!IMPORTANT]
 > Use Cleo only on systems you own or have explicit permission to test.
 
-This repository is the official **binary distribution** for Cleo. The downloads are
-self-contained, so students do not need to install .NET or build anything from source.
+This repository is the official binary distribution for Cleo. You do not need to build the
+application or install .NET.
 
-## Download Cleo
+Each supported platform has **one file to download**. Windows and Linux unpack to one executable.
+The DMG and DEB are single OS-native installer files; their internal app metadata, menu entry, and
+icon are packaging components, not companion runtime DLLs.
 
-Choose the build that matches your device. Every button points directly to the latest
-release—no account or extra runtime is required.
+## Start here
 
-| Platform | Device | Binary type | Download |
+**Not sure whether your device is Windows, macOS, Linux, or a Chromebook—or whether it uses
+Intel, AMD, or ARM?** Follow the [step-by-step installation guide](INSTALLATION.md). Its guided
+installers select the correct supported processor automatically and verify the download before
+installing it.
+
+> [!TIP]
+> Intel and AMD computers normally use the same **x64/amd64** download. **ARM64** is a different
+> processor family. Chromebook owners do not need to determine this themselves.
+
+## Direct downloads
+
+Every button points to the latest release. If you are uncertain, use the guide above instead of
+guessing.
+
+| Platform | Supported device | Package | Download |
 |:--|:--|:--:|:--:|
-| Windows | 64-bit Intel/AMD | `.zip` | <a href="https://github.com/sahmsec/cleo-sqli/releases/latest/download/Cleo-Windows-x64.zip"><img src="https://img.shields.io/badge/Download-0078D4?style=for-the-badge" alt="Download Windows x64" width="132" height="32"></a> |
-| macOS | Apple Silicon (M1, M2, M3, M4, or newer) | `.dmg` | <a href="https://github.com/sahmsec/cleo-sqli/releases/latest/download/Cleo-macOS-Apple-Silicon.dmg"><img src="https://img.shields.io/badge/Download-111111?style=for-the-badge" alt="Download macOS ARM64" width="132" height="32"></a> |
-| Linux | 64-bit Intel/AMD | `.tar.gz` | <a href="https://github.com/sahmsec/cleo-sqli/releases/latest/download/Cleo-Linux-x64.tar.gz"><img src="https://img.shields.io/badge/Download-FCC624?style=for-the-badge" alt="Download Linux x64" width="132" height="32"></a> |
-| Linux | ARM64 | `.tar.gz` | <a href="https://github.com/sahmsec/cleo-sqli/releases/latest/download/Cleo-Linux-arm64.tar.gz"><img src="https://img.shields.io/badge/Download-FCC624?style=for-the-badge" alt="Download Linux ARM64" width="132" height="32"></a> |
+| Windows | Windows 10 22H2/11, 64-bit Intel or AMD | `.zip` | <a href="https://github.com/sahmsec/cleo-sqli/releases/latest/download/Cleo-Windows-x64.zip"><img src="https://img.shields.io/badge/Download-0078D4?style=for-the-badge" alt="Download Windows x64" width="132" height="32"></a> |
+| macOS | macOS 11+, Apple Silicon | `.dmg` | <a href="https://github.com/sahmsec/cleo-sqli/releases/latest/download/Cleo-macOS-Apple-Silicon.dmg"><img src="https://img.shields.io/badge/Download-111111?style=for-the-badge" alt="Download macOS Apple Silicon" width="132" height="32"></a> |
+| Linux | 64-bit Intel/AMD Linux | `.tar.gz` | <a href="https://github.com/sahmsec/cleo-sqli/releases/latest/download/Cleo-Linux-x64.tar.gz"><img src="https://img.shields.io/badge/Download-FCC624?style=for-the-badge" alt="Download Linux x64" width="132" height="32"></a> |
+| Linux | 64-bit ARM Linux | `.tar.gz` | <a href="https://github.com/sahmsec/cleo-sqli/releases/latest/download/Cleo-Linux-arm64.tar.gz"><img src="https://img.shields.io/badge/Download-FCC624?style=for-the-badge" alt="Download Linux ARM64" width="132" height="32"></a> |
 | Chromebook | Intel/AMD Linux environment | `.deb` | <a href="https://github.com/sahmsec/cleo-sqli/releases/latest/download/Cleo-Chromebook-x64.deb"><img src="https://img.shields.io/badge/Download-4285F4?style=for-the-badge" alt="Download Chromebook x64" width="132" height="32"></a> |
-| Chromebook | ARM Linux environment | `.deb` | <a href="https://github.com/sahmsec/cleo-sqli/releases/latest/download/Cleo-Chromebook-arm64.deb"><img src="https://img.shields.io/badge/Download-4285F4?style=for-the-badge" alt="Download Chromebook ARM64" width="132" height="32"></a> |
+| Chromebook | 64-bit ARM (ARM64) Linux environment | `.deb` | <a href="https://github.com/sahmsec/cleo-sqli/releases/latest/download/Cleo-Chromebook-arm64.deb"><img src="https://img.shields.io/badge/Download-4285F4?style=for-the-badge" alt="Download Chromebook ARM64" width="132" height="32"></a> |
 
-You can also open the [latest release page](https://github.com/sahmsec/cleo-sqli/releases/latest)
-to see every download and its checksum file.
+The [latest release page](https://github.com/sahmsec/cleo-sqli/releases/latest) also contains
+`SHA256SUMS.txt`. That file is verification data, not an installer. Do not download GitHub's
+automatically generated **Source code** archives; those are repository snapshots, not Cleo.
 
-## Install
+## Installation summary
 
-| Platform | What to do |
+| Platform | Recommended method |
 |:--|:--|
-| **Windows** | Download the ZIP, choose **Extract All**, open the extracted folder, and double-click `Cleo.exe`. |
-| **macOS** | Open the DMG and drag **Cleo** into **Applications**. This build supports Apple Silicon Macs. |
-| **Linux** | Extract the `.tar.gz`, allow the `Cleo` file to run as a program in its file properties, then open it. |
-| **Chromebook** | Enable **Linux development environment**, download the correct `.deb`, double-click it, and choose **Install with Linux**. |
+| **Windows** | Run the guided PowerShell installer, or extract the ZIP and open `Cleo.exe`. |
+| **macOS** | Open the DMG and drag **Cleo** into **Applications**. Apple Silicon only. |
+| **Linux** | Run the guided terminal installer; it detects x64 versus ARM64. |
+| **Chromebook** | Enable the Linux development environment, then run the Chromebook command in the guide. It detects the package automatically. |
 
-> [!NOTE]
-> Windows may show a SmartScreen message because the app is not commercially code-signed.
-> On macOS, use **System Settings → Privacy & Security → Open Anyway** if the first launch
-> is blocked. These warnings are expected for the free classroom builds.
+See [Detailed installation instructions](INSTALLATION.md) for exact commands, first-launch
+warnings, updates, uninstallation, and troubleshooting.
 
 ## How to use Cleo
 
@@ -66,20 +80,19 @@ to see every download and its checksum file.
    when you want to keep them.
 
 > [!TIP]
-> Discovered tables and columns stay available during the current session. You can collapse
-> and reopen them without running the same step again. Use **Clean All** when you want to
-> reset the workspace and begin with a different target.
+> Discovered tables and columns stay available during the current session. Use **Clean All** when
+> you want to reset the workspace and begin with a different target.
 
 ## Support
 
-If a download or installation fails, open an
-[issue](https://github.com/sahmsec/cleo-sqli/issues) and include your operating system,
-processor type, and the exact error message.
+If installation fails, use the support checklist at the bottom of the
+[installation guide](INSTALLATION.md#asking-for-help), then open an
+[issue](https://github.com/sahmsec/cleo-sqli/issues).
 
 ## License
 
-Cleo is free to use for personal learning, classroom instruction, and explicitly
-authorized security testing. The application is distributed under the
+Cleo is free to use for personal learning, classroom instruction, and explicitly authorized
+security testing. The application is distributed under the
 [Cleo Educational Binary License](LICENSE.md); it is not open-source software.
 
 ---
