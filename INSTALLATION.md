@@ -1,37 +1,28 @@
 # Install Cleo
 
-This guide takes you from identifying your device to opening Cleo. You do not need to know your
-processor brand, install .NET, or build anything from source.
+Choose your system below, then follow its instructions. You do not need to know the processor
+architecture, install .NET, or build anything from source.
 
 > [!IMPORTANT]
 > Download Cleo only from the official
 > [`sahmsec/cleo-sqli` repository](https://github.com/sahmsec/cleo-sqli). Use it only on systems
 > you own or have explicit permission to test.
 
-## Choose your device
+## Choose your system
 
-Start with the description you recognize:
+1. [Windows](#windows)
+2. [Mac](#macos)
+3. [Linux](#linux)
+4. [Chromebook](#chromebook)
 
-| What you see | Follow this section |
-|:--|:--|
-| The device says **Chromebook** or runs **ChromeOS** | [Chromebook](#chromebook) |
-| A **Windows Start** button is on the taskbar | [Windows](#windows) |
-| An **Apple menu** is at the top-left of the screen | [macOS](#macos) |
-| It runs Ubuntu, Debian, Fedora, Mint, Arch, or another desktop Linux—and is not a Chromebook | [Linux](#linux) |
-
-You usually do **not** need to choose between Intel, AMD, and ARM. The guided installers detect
-the supported processor automatically.
-
-- Intel and AMD computers normally share the `x64` or `amd64` build. The name `amd64` does not
-  mean that it only works on AMD processors.
-- ARM may be shown as `ARM64` or `aarch64`.
-- `AIM` is not a processor type; it is usually a misreading of `ARM`.
+You do not need to identify the processor yourself. The guided installer selects the correct
+supported architecture automatically.
 
 ## Before installing
 
 The guided installers:
 
-1. detect the operating system and processor;
+1. detect the supported processor architecture;
 2. resolve the latest release to one fixed version;
 3. download only the matching package from GitHub over HTTPS;
 4. verify it against the release's `SHA256SUMS.txt` file;
@@ -57,19 +48,17 @@ To check manually, open **Settings → System → About → System type**. Micro
 ### Recommended: guided PowerShell installation
 
 1. Right-click the **Start** button and open **Terminal** or **Windows PowerShell**.
-2. Copy and run these three lines:
+2. Copy and run this one line:
 
    ```powershell
-   $installer = Join-Path $env:TEMP ("install-cleo-{0}.ps1" -f [Guid]::NewGuid().ToString('N'))
-   try {
-       Invoke-WebRequest 'https://raw.githubusercontent.com/sahmsec/cleo-sqli/main/install/install-windows.ps1' -OutFile $installer
-       & $installer
-   }
-   finally { Remove-Item -LiteralPath $installer -Force -ErrorAction SilentlyContinue }
+   irm https://raw.githubusercontent.com/sahmsec/cleo-sqli/main/install/install-windows.ps1 | iex
    ```
 
 3. The installer verifies the download, installs Cleo for your Windows account, creates a
    **Cleo** Start-menu shortcut, and opens the app.
+
+Run the one-liner only with the official `raw.githubusercontent.com/sahmsec/cleo-sqli` URL shown
+above. It downloads and runs the public installer directly in PowerShell.
 
 If company or school policy prevents PowerShell scripts from running, do not weaken that policy.
 Use the manual ZIP method below or ask the device administrator.
@@ -143,60 +132,6 @@ explains this confirmation. Do not disable Gatekeeper or remove quarantine attri
 - **Update:** open the newest DMG and replace the existing app, or rerun the terminal installer.
 - **Remove:** close Cleo and drag `Cleo.app` from **Applications** or `~/Applications` to the Trash.
 
-## Chromebook
-
-You only need to know that the device is a Chromebook. The installer asks Debian which processor
-architecture it uses and selects the correct `.deb` automatically.
-
-### Step 1: enable the Linux development environment
-
-1. Open **Settings**.
-2. Select **About ChromeOS → Developers**.
-3. Next to **Linux development environment**, select **Set up** and finish the prompts.
-
-Google's [Chromebook Linux setup guide](https://support.google.com/chromebook/answer/9145439?hl=en)
-has the current screenshots and requirements. A school or company administrator may disable this
-feature; Cleo cannot install on that Chromebook until the administrator enables it.
-
-### Step 2: run the guided Chromebook installer
-
-1. Open the Chromebook Launcher.
-2. Open **Linux apps → Terminal**.
-3. Copy and run these two lines:
-
-   ```bash
-   installer="$(mktemp)"
-   curl -fL 'https://raw.githubusercontent.com/sahmsec/cleo-sqli/main/install/install-cleo.sh' -o "$installer" &&
-     bash "$installer" --chromebook
-   rm -f "$installer"
-   ```
-
-4. Enter your Linux password if `sudo` asks for it. Nothing is sent to `sudo` until the package
-   checksum and package structure have been verified.
-5. Open the Chromebook Launcher and select **Linux apps → Cleo**.
-
-### Manual Chromebook package choice
-
-The guided installer is recommended. If you must choose manually, run:
-
-```bash
-dpkg --print-architecture
-```
-
-| Result | Correct package |
-|:--|:--|
-| `amd64` | [`Cleo-Chromebook-x64.deb`](https://github.com/sahmsec/cleo-sqli/releases/latest/download/Cleo-Chromebook-x64.deb) |
-| `arm64` | [`Cleo-Chromebook-arm64.deb`](https://github.com/sahmsec/cleo-sqli/releases/latest/download/Cleo-Chromebook-arm64.deb) |
-
-After downloading, move the `.deb` into **Linux files**, double-click it, and choose
-**Install with Linux**. ChromeOS documents the Linux development environment for app developers
-in its [Linux setup reference](https://developers.google.com/chromeos/app-development/develop/setup).
-
-### Update or remove on Chromebook
-
-- **Update:** rerun the guided Chromebook installer; it selects and verifies the newest package.
-- **Remove:** open the Linux Terminal and run `sudo apt-get remove cleo`.
-
 ## Linux
 
 This section is for desktop Linux that is **not a Chromebook**.
@@ -267,6 +202,60 @@ package names and support details can differ on other distributions.
   `~/.local/share/icons/hicolor/256x256/apps/in.sahmsec.cleo.png`. Delete the
   `~/.local/share/cleo` directory only if it is empty, so anything you placed beside Cleo is
   preserved.
+
+## Chromebook
+
+The guided installer asks the Chromebook's Linux environment which processor it uses and selects
+the correct `.deb` automatically.
+
+### Step 1: enable the Linux development environment
+
+1. Open **Settings**.
+2. Select **About ChromeOS → Developers**.
+3. Next to **Linux development environment**, select **Set up** and finish the prompts.
+
+Google's [Chromebook Linux setup guide](https://support.google.com/chromebook/answer/9145439?hl=en)
+has the current screenshots and requirements. A school or company administrator may disable this
+feature; Cleo cannot install on that Chromebook until the administrator enables it.
+
+### Step 2: run the guided Chromebook installer
+
+1. Open the Chromebook Launcher.
+2. Open **Linux apps → Terminal**.
+3. Copy and run these commands:
+
+   ```bash
+   installer="$(mktemp)"
+   curl -fL 'https://raw.githubusercontent.com/sahmsec/cleo-sqli/main/install/install-cleo.sh' -o "$installer" &&
+     bash "$installer" --chromebook
+   rm -f "$installer"
+   ```
+
+4. Enter your Linux password if `sudo` asks for it. Nothing is sent to `sudo` until the package
+   checksum and package structure have been verified.
+5. Open the Chromebook Launcher and select **Linux apps → Cleo**.
+
+### Manual Chromebook package choice
+
+The guided installer is recommended. If you must choose manually, run:
+
+```bash
+dpkg --print-architecture
+```
+
+| Result | Correct package |
+|:--|:--|
+| `amd64` | [`Cleo-Chromebook-x64.deb`](https://github.com/sahmsec/cleo-sqli/releases/latest/download/Cleo-Chromebook-x64.deb) |
+| `arm64` | [`Cleo-Chromebook-arm64.deb`](https://github.com/sahmsec/cleo-sqli/releases/latest/download/Cleo-Chromebook-arm64.deb) |
+
+After downloading, move the `.deb` into **Linux files**, double-click it, and choose
+**Install with Linux**. ChromeOS documents the Linux development environment for app developers
+in its [Linux setup reference](https://developers.google.com/chromeos/app-development/develop/setup).
+
+### Update or remove on Chromebook
+
+- **Update:** rerun the guided Chromebook installer; it selects and verifies the newest package.
+- **Remove:** open the Linux Terminal and run `sudo apt-get remove cleo`.
 
 ## Verify a download manually
 
@@ -371,7 +360,7 @@ substituted on ChromeOS.
 
 Open an [installation issue](https://github.com/sahmsec/cleo-sqli/issues) and include:
 
-1. whether the device is Windows, Mac, Chromebook, or Linux;
+1. whether the device is Windows, Mac, Linux, or Chromebook;
 2. the exact installer/package filename;
 3. the complete error message;
 4. the output of the matching command:

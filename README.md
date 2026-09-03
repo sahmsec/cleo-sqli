@@ -25,14 +25,9 @@ icon are packaging components, not companion runtime DLLs.
 
 ## Start here
 
-**Not sure whether your device is Windows, macOS, Linux, or a Chromebook—or whether it uses
-Intel, AMD, or ARM?** Follow the [step-by-step installation guide](INSTALLATION.md). Its guided
-installers select the correct supported processor automatically and verify the download before
-installing it.
-
-> [!TIP]
-> Intel and AMD computers normally use the same **x64/amd64** download. **ARM64** is a different
-> processor family. Chromebook owners do not need to determine this themselves.
+Choose your system—**Windows, Mac, Linux, or Chromebook**—in the
+[step-by-step installation guide](INSTALLATION.md). You do not need to know the processor: the
+guided installer selects the correct supported architecture and verifies the download.
 
 ## Direct downloads
 
