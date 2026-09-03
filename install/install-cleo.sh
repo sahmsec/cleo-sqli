@@ -100,9 +100,9 @@ Options:
   --download-only DIR Verify the right package and copy it to DIR without
                       installing, launching, or using sudo.
   --no-launch         Install Cleo but do not open it afterward.
-  --version VERSION   Install a specific release, such as 1.2.1 or v1.2.1.
-                      By default, the latest release is resolved once and the
-                      resulting version is pinned for every download.
+  --version VERSION   Request MAJOR.MINOR.PATCH, optionally starting with v.
+                      Only the currently public release is downloadable; omit
+                      this option to resolve and install the latest release.
   --detect-only       Print the detected system and selected package, then exit.
   -h, --help          Show this help.
 
@@ -880,7 +880,7 @@ prepare_assets() {
   require_command curl "Install curl, or use --asset-dir with trusted files downloaded elsewhere."
   if [ -n "$REQUESTED_TAG" ]; then
     if ! normalized=$(validate_release_tag "$REQUESTED_TAG"); then
-      die "Invalid release version '$REQUESTED_TAG'. Use MAJOR.MINOR.PATCH, for example 1.2.1."
+      die "Invalid release version '$REQUESTED_TAG'. Use MAJOR.MINOR.PATCH, or omit --version to install the current public release."
     fi
     RELEASE_LABEL="$normalized"
   else

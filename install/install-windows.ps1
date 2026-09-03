@@ -15,8 +15,9 @@ user. An exact four-file legacy Cleo installation is migrated automatically.
 or when an existing Start Menu shortcut points somewhere else.
 
 .PARAMETER Version
-Release version to install, with or without a leading "v" (for example,
-"1.2.1" or "v1.2.1"). The default is the latest published release.
+Release version to request in MAJOR.MINOR.PATCH form, with an optional leading
+"v". Only the currently public release is downloadable; omit this parameter to
+install the latest release.
 
 .PARAMETER InstallDirectory
 Destination directory. The default is
@@ -299,7 +300,7 @@ function ConvertTo-ReleaseTag {
 
     $candidate = $RequestedVersion.Trim()
     if ($candidate -notmatch '^[vV]?(?<number>[0-9]+\.[0-9]+\.[0-9]+)$') {
-        throw "Version must use MAJOR.MINOR.PATCH, with an optional leading 'v' (for example, 1.2.1)."
+        throw "Version must use MAJOR.MINOR.PATCH with an optional leading 'v'. Omit -Version to install the current public release."
     }
 
     return 'v' + $Matches['number']
