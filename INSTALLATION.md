@@ -27,43 +27,28 @@ The guided installers:
 3. download only the matching package from GitHub over HTTPS;
 4. verify it against the release's `SHA256SUMS.txt` file;
 5. inspect the package before installing anything;
-6. keep the verified package in the folder where the terminal command was started and print its
-   absolute path.
+6. install Cleo in the location shown below;
+7. remove the temporary release package automatically.
 
 They do not disable antivirus protection, add Defender exclusions, turn off Gatekeeper, install
 an archive utility, or bypass certificate checks. Administrator access is not required except
 when the verified Chromebook `.deb` is handed to Debian's package manager. Debian may then fetch
 the package's declared desktop-library dependencies from its configured repositories.
 
-### Choose where the package is saved
+You can run a guided command from any terminal folder. That folder is not used as the install
+destination, and no ZIP, DMG, tarball, or DEB is left beside your files after a normal install.
 
-Before running a guided installer, use the terminal to enter the folder where you want to keep the
-download. The installer remembers that original working directory before it uses private temporary
-staging. After verification, it leaves the selected ZIP, DMG, tarball, or DEB there and prints a
-line beginning with `[OK] Verified package saved:` followed by its absolute path.
+| System | Final location used by the guided installer |
+|:--|:--|
+| Windows | The current user's real `Desktop\Cleo\Cleo.exe` path, including a redirected or OneDrive Desktop |
+| macOS | `~/Applications/Cleo.app` |
+| Linux | `~/.local/share/cleo/Cleo` plus a command and application-menu launcher under `~/.local` |
+| Chromebook | Debian-managed `/usr/bin/cleo` and launcher files |
 
-On Windows, `Get-Location` shows the current folder and `Set-Location 'C:\path\you\choose'` changes
-it. On macOS, Linux, and Chromebook, `pwd` shows the current folder and `cd '/path/you/choose'`
-changes it. Paths containing spaces are supported when quoted. If you do not change folders, the
-package is saved wherever the terminal opened. Choose a normal personal folder, such as Downloads,
-that is separate from the final installed-app location. The Windows installer refuses to retain
-the ZIP inside its managed Cleo installation directory, and the macOS installer refuses to retain
-the DMG inside the `~/Applications/Cleo.app` bundle that an update replaces.
-
-The retained package is a download copy, not the guided installer's final app:
-
-| System | Package retained in the original terminal folder | Final location used by the guided installer |
-|:--|:--|:--|
-| Windows | `Cleo-Windows-x64.zip` | `%LOCALAPPDATA%\Programs\Cleo\Cleo.exe` |
-| macOS | `Cleo-macOS-Apple-Silicon.dmg` | `~/Applications/Cleo.app` |
-| Linux | `Cleo-Linux-x64.tar.gz` or `Cleo-Linux-arm64.tar.gz` | `~/.local/share/cleo/Cleo` |
-| Chromebook | `Cleo-Chromebook-x64.deb` or `Cleo-Chromebook-arm64.deb` | Debian-managed `/usr/bin/cleo` and launcher files |
-
-Rerunning an installer reuses the file when it already has the expected checksum. If a different
-file has that package name, the installer leaves it unchanged and asks you to move or rename it
-before trying again. It also refuses unsafe destinations such as a symbolic link or a directory
-with the package's name. Uninstalling Cleo does not remove the retained package; delete that
-download copy yourself only when you no longer want it.
+The installers first download into a private temporary directory. They remove that directory and
+the release package after success, and also attempt cleanup after a failure. The explicit
+`--download-only` option in the macOS/Linux/Chromebook installer is different: it saves a verified
+package where you request and does not install it.
 
 ## Windows
 
@@ -79,18 +64,21 @@ To check manually, open **Settings → System → About → System type**. Micro
 
 ### Recommended: guided PowerShell installation
 
-1. Open the folder where you want the verified ZIP to remain. Right-click inside it and choose
-   **Open in Terminal**, or open **Terminal**/**Windows PowerShell** and use `Set-Location` to enter
-   that folder. Run `Get-Location` if you want to confirm it first.
+1. Open **Terminal** or **Windows PowerShell**. It does not matter which folder the terminal opens
+   in.
 2. Copy and run this one line:
 
    ```powershell
    irm https://raw.githubusercontent.com/sahmsec/cleo-sqli/main/install/install-windows.ps1 | iex
    ```
 
-3. The installer verifies the download, keeps `Cleo-Windows-x64.zip` in that original folder,
-   prints its absolute path, installs Cleo for your Windows account, creates a **Cleo** Start-menu
-   shortcut, and opens the app.
+3. The installer detects your real Windows Desktop, creates a `Cleo` folder there, verifies and
+   extracts the download, removes the temporary ZIP, creates a **Cleo** Start-menu shortcut, and
+   opens the app. The final folder contains only `Cleo.exe`.
+
+If an earlier guided release installed Cleo in `%LOCALAPPDATA%\Programs\Cleo`, the installer moves
+that recognized installation to `Desktop\Cleo` during the update. It does not remove an
+unrecognized folder or unrelated files.
 
 Run the one-liner only with the official `raw.githubusercontent.com/sahmsec/cleo-sqli` URL shown
 above. It downloads and runs the public installer directly in PowerShell.
@@ -117,13 +105,11 @@ your organization's policy instead.
 ### Update or remove on Windows
 
 - **Update:** close Cleo, then run the guided installer again. It safely replaces the managed Cleo
-  installation and removes obsolete companion DLLs left by Cleo's older Windows package. If a ZIP
-  from another release has the same name in the terminal folder, move or rename that ZIP first.
-- **Remove:** close Cleo, delete `%LOCALAPPDATA%\Programs\Cleo`, and delete the **Cleo** shortcut
+  installation and removes obsolete companion DLLs left by Cleo's older Windows package.
+- **Remove:** close Cleo, delete the `Cleo` folder from your Desktop, and delete the **Cleo** shortcut
   from `%APPDATA%\Microsoft\Windows\Start Menu\Programs`. Then open PowerShell and run
   `reg.exe delete 'HKCU\Software\sahmsec\Cleo\Installer' /f /reg:64` to remove Cleo's per-user
-  installer record. That command targets only Cleo's installer key. The retained ZIP is separate;
-  delete it from the path printed by the installer only if you no longer want the download copy.
+  installer record. That command targets only Cleo's installer key.
 
 ## macOS
 
@@ -146,7 +132,7 @@ supported; a line labeled **Processor** with Intel is not. See Apple's
 
 ### Optional terminal installation
 
-Open **Terminal**, use `cd` to enter the folder where you want the verified DMG to remain, then run:
+Open **Terminal** in any folder, then run:
 
 ```bash
 installer="$(mktemp)"
@@ -155,9 +141,8 @@ curl -fL 'https://raw.githubusercontent.com/sahmsec/cleo-sqli/main/install/insta
 rm -f "$installer"
 ```
 
-The installer prints the absolute path of the retained `Cleo-macOS-Apple-Silicon.dmg`, then installs
-`Cleo.app` into `~/Applications` without requesting administrator access. The DMG and installed app
-are separate: uninstalling the app does not delete the retained DMG.
+The installer verifies the DMG, installs `Cleo.app` into `~/Applications` without requesting
+administrator access, then ejects and removes its temporary DMG.
 
 ### First macOS launch
 
@@ -169,10 +154,7 @@ explains this confirmation. Do not disable Gatekeeper or remove quarantine attri
 ### Update or remove on macOS
 
 - **Update:** open the newest DMG and replace the existing app, or rerun the terminal installer.
-  Before rerunning, move or rename a retained DMG from another release if it has the same filename.
 - **Remove:** close Cleo and drag `Cleo.app` from **Applications** or `~/Applications` to the Trash.
-  If you used the terminal installer, separately delete the retained DMG from the path it printed
-  only when you no longer want that download copy.
 
 ## Linux
 
@@ -185,8 +167,7 @@ glibc and X11/XWayland. Alpine/musl, 32-bit Linux, and headless servers are not 
 
 ### Recommended: guided terminal installation
 
-Open a terminal, use `cd` to enter the folder where you want the verified tarball to remain, then
-run:
+Open a terminal in any folder, then run:
 
 ```bash
 installer="$(mktemp)"
@@ -195,11 +176,9 @@ curl -fL 'https://raw.githubusercontent.com/sahmsec/cleo-sqli/main/install/insta
 rm -f "$installer"
 ```
 
-The installer detects the CPU, verifies the package, retains the selected `.tar.gz` in that original
-folder, and prints its absolute path. It installs Cleo under `~/.local`, adds the `cleo` command,
-creates an application-menu entry when possible, and opens the app. The retained tarball and
-installed executable are separate. If a new terminal does not recognize `cleo`, use the
-application menu or run
+The installer detects the CPU, verifies the package, installs Cleo under `~/.local`, adds the
+`cleo` command, creates an application-menu entry when possible, removes its temporary tarball,
+and opens the app. If a new terminal does not recognize `cleo`, use the application menu or run
 `"$HOME/.local/share/cleo/Cleo"` directly.
 
 ### Manual Linux installation
@@ -240,15 +219,13 @@ package names and support details can differ on other distributions.
 
 ### Update or remove on Linux
 
-- **Update:** rerun the guided Linux installer. First move or rename a retained tarball from another
-  release if it has the same filename.
+- **Update:** rerun the guided Linux installer.
 - **Remove:** close Cleo, then delete `~/.local/share/cleo/Cleo`,
   `~/.local/share/cleo/.installed-by-cleo-installer`, `~/.local/bin/cleo`, and
   `~/.local/share/applications/cleo.desktop`, and
   `~/.local/share/icons/hicolor/256x256/apps/in.sahmsec.cleo.png`. Delete the
   `~/.local/share/cleo` directory only if it is empty, so anything you placed beside Cleo is
-  preserved. Separately delete the retained tarball from the path printed by the installer only if
-  you no longer want that download copy.
+  preserved.
 
 ## Chromebook
 
@@ -269,8 +246,7 @@ feature; Cleo cannot install on that Chromebook until the administrator enables 
 
 1. Open the Chromebook Launcher.
 2. Open **Linux apps → Terminal**.
-3. Use `cd` to enter the Linux folder where you want the verified DEB to remain. Run `pwd` first if
-   you want to confirm the folder, then copy and run these commands:
+3. From any terminal folder, copy and run these commands:
 
    ```bash
    installer="$(mktemp)"
@@ -279,10 +255,9 @@ feature; Cleo cannot install on that Chromebook until the administrator enables 
    rm -f "$installer"
    ```
 
-4. The installer retains the selected `.deb` in that original Linux folder and prints its absolute
-   path. That file is the download copy; the installed app is managed separately by Debian.
-5. Enter your Linux password if `sudo` asks for it. Nothing is sent to `sudo` until the package
+4. Enter your Linux password if `sudo` asks for it. Nothing is sent to `sudo` until the package
    checksum and package structure have been verified.
+5. The installer removes its temporary `.deb` after Debian finishes installing it.
 6. Open the Chromebook Launcher and select **Linux apps → Cleo**.
 
 ### Manual Chromebook package choice
@@ -305,10 +280,7 @@ in its [Linux setup reference](https://developers.google.com/chromeos/app-develo
 ### Update or remove on Chromebook
 
 - **Update:** rerun the guided Chromebook installer; it selects and verifies the newest package.
-  First move or rename a retained DEB from another release if it has the same filename.
-- **Remove:** open the Linux Terminal and run `sudo apt-get remove cleo`. This removes the installed
-  app but not the retained DEB; delete the DEB from the path printed by the installer only if you no
-  longer want that download copy.
+- **Remove:** open the Linux Terminal and run `sudo apt-get remove cleo`.
 
 ## Verify a download manually
 

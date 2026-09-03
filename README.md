@@ -32,10 +32,10 @@ Choose your system—**Windows, Mac, Linux, or Chromebook**—here:
 You do not need to know the processor: the guided installer selects the correct supported
 architecture and verifies the download.
 
-The guided installer keeps the checksum-verified release package in the folder where you run its
-terminal command and prints that package's absolute path. The installed app still goes to the
-normal location for your system; the ZIP, DMG, tarball, or DEB left in your chosen folder is your
-download copy to keep or delete later.
+You can run the guided command from any folder. It verifies the release in a private temporary
+workspace, installs Cleo in the normal location for your system, and removes the temporary ZIP,
+DMG, tarball, or DEB afterward. On Windows, the final folder is always `Desktop\Cleo` unless an
+advanced user explicitly supplies a different installer destination.
 
 ## Direct downloads
 

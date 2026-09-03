@@ -7,8 +7,8 @@ Installs the current 64-bit Windows release of Cleo for the current user.
 The installer detects the native Windows architecture, resolves one immutable
 release tag, downloads the Windows ZIP and its published SHA-256 manifest,
 verifies both the checksum and archive layout, and installs Cleo without
-requesting elevation or changing PowerShell security settings. The verified
-release ZIP is retained in the terminal's original working directory.
+requesting elevation or changing PowerShell security settings. Downloads use a
+private temporary directory that is removed after installation.
 
 Rerunning the installer replaces a Cleo installation recorded for the current
 user. An exact four-file legacy Cleo installation is migrated automatically.
@@ -22,7 +22,7 @@ install the latest release.
 
 .PARAMETER InstallDirectory
 Destination directory. The default is
-%LOCALAPPDATA%\Programs\Cleo.
+the current user's Windows Desktop\Cleo folder.
 
 .PARAMETER AssetDirectory
 Offline/test source directory containing Cleo-Windows-x64.zip and
@@ -65,28 +65,6 @@ param(
 
 Set-StrictMode -Version 2.0
 
-function Test-PathContainsLineBreak {
-    param(
-        [Parameter(Mandatory = $true)]
-        [string] $Path
-    )
-
-    return $Path.IndexOfAny([char[]] "`r`n") -ge 0
-}
-
-# Capture the caller's location before the installer creates or enters any
-# staging location. This is intentionally based on the PowerShell location,
-# not on the script file (which does not exist when invoked through irm | iex).
-$invocationLocation = Get-Location
-if ($null -eq $invocationLocation.Provider -or
-    $invocationLocation.Provider.Name -ne 'FileSystem') {
-    throw 'Run the Cleo installer from a file-system directory. The verified release package is retained in the directory where the terminal was opened.'
-}
-$originalWorkingDirectory = [IO.Path]::GetFullPath($invocationLocation.ProviderPath)
-if (Test-PathContainsLineBreak -Path $originalWorkingDirectory) {
-    throw 'The original working directory contains a line-break character and cannot be used as the retained-package destination.'
-}
-
 $Repository = 'sahmsec/cleo-sqli'
 $AssetName = 'Cleo-Windows-x64.zip'
 $ChecksumName = 'SHA256SUMS.txt'
@@ -112,25 +90,6 @@ function Test-SamePath {
         [IO.Path]::GetFullPath($Second).TrimEnd('\', '/'),
         [StringComparison]::OrdinalIgnoreCase
     )
-}
-
-function Test-PathAtOrBelowDirectory {
-    param(
-        [Parameter(Mandatory = $true)]
-        [string] $Path,
-
-        [Parameter(Mandatory = $true)]
-        [string] $Directory
-    )
-
-    $fullPath = [IO.Path]::GetFullPath($Path).TrimEnd('\', '/')
-    $fullDirectory = [IO.Path]::GetFullPath($Directory).TrimEnd('\', '/')
-    if ([string]::Equals($fullPath, $fullDirectory, [StringComparison]::OrdinalIgnoreCase)) {
-        return $true
-    }
-
-    $directoryPrefix = $fullDirectory + [IO.Path]::DirectorySeparatorChar
-    return $fullPath.StartsWith($directoryPrefix, [StringComparison]::OrdinalIgnoreCase)
 }
 
 function Get-FileSystemPath {
@@ -164,6 +123,34 @@ function Get-FileSystemPath {
         throw "$Description must use the file system, not a PowerShell provider path: $Path"
     }
     return [IO.Path]::GetFullPath($providerPath)
+}
+
+function Get-DefaultCleoInstallDirectory {
+    $desktopDirectory = [Environment]::GetFolderPath(
+        [Environment+SpecialFolder]::DesktopDirectory
+    )
+    if ([string]::IsNullOrWhiteSpace($desktopDirectory)) {
+        throw 'Windows did not provide a Desktop directory for the current user.'
+    }
+
+    $desktopPath = Get-FileSystemPath `
+        -Path $desktopDirectory `
+        -Description 'Windows Desktop directory'
+    if ((Test-Path -LiteralPath $desktopPath) -and
+        -not (Test-Path -LiteralPath $desktopPath -PathType Container)) {
+        throw "The Windows Desktop path is not a directory: $desktopPath"
+    }
+    return Join-Path $desktopPath 'Cleo'
+}
+
+function Get-PreviousDefaultCleoInstallDirectory {
+    $localAppData = [Environment]::GetFolderPath(
+        [Environment+SpecialFolder]::LocalApplicationData
+    )
+    if ([string]::IsNullOrWhiteSpace($localAppData)) {
+        return $null
+    }
+    return Join-Path (Join-Path $localAppData 'Programs') 'Cleo'
 }
 
 function Get-NativeWindowsArchitecture {
@@ -484,6 +471,7 @@ function Assert-ArchiveChecksum {
     if (-not [string]::Equals($actualHash, $ExpectedHash, [StringComparison]::Ordinal)) {
         throw "SHA-256 verification failed for $AssetName. Expected $ExpectedHash but received $actualHash. The file was not installed."
     }
+    Write-Host "[OK] SHA-256 matches: $actualHash"
 }
 
 function Expand-VerifiedCleoArchive {
@@ -618,164 +606,6 @@ function Assert-NoReparsePointTree {
             }
             if (($child.Attributes -band [IO.FileAttributes]::Directory) -ne 0) {
                 $pending.Push([IO.DirectoryInfo] $child)
-            }
-        }
-    }
-}
-
-function Assert-SafeArchiveDestinationDirectory {
-    param(
-        [Parameter(Mandatory = $true)]
-        [string] $Path
-    )
-
-    $fullPath = [IO.Path]::GetFullPath($Path)
-    if (-not (Test-Path -LiteralPath $fullPath -PathType Container)) {
-        throw "The original working directory no longer exists or is not a directory: $fullPath"
-    }
-
-    # Check the destination and each existing ancestor without traversing any
-    # unrelated children. A reparse point in this chain could redirect the
-    # retained download outside the directory the caller selected.
-    $currentPath = $fullPath
-    while ($true) {
-        $item = Get-Item -LiteralPath $currentPath -Force
-        if (-not $item.PSIsContainer) {
-            throw "The retained-package destination is not a directory: $currentPath"
-        }
-        if (($item.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0) {
-            throw "The retained-package destination cannot use a symbolic link, junction, or other reparse point: $currentPath"
-        }
-
-        $root = [IO.Path]::GetPathRoot($currentPath)
-        if ([string]::IsNullOrWhiteSpace($root) -or
-            (Test-SamePath -First $currentPath -Second $root)) {
-            break
-        }
-        $parent = [IO.Directory]::GetParent($currentPath)
-        if ($null -eq $parent) {
-            break
-        }
-        $currentPath = $parent.FullName
-    }
-}
-
-function Test-ExistingVerifiedArchive {
-    param(
-        [Parameter(Mandatory = $true)]
-        [string] $Path,
-
-        [Parameter(Mandatory = $true)]
-        [string] $ExpectedHash
-    )
-
-    $existingItem = Get-Item -LiteralPath $Path -Force -ErrorAction SilentlyContinue
-    if ($null -eq $existingItem) {
-        return $false
-    }
-    if (($existingItem.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0) {
-        throw "Refusing to replace a symbolic link, junction, or other reparse point at the retained-package path: $Path"
-    }
-    if ($existingItem.PSIsContainer -or
-        -not (Test-Path -LiteralPath $Path -PathType Leaf)) {
-        throw "Refusing to replace a non-file item at the retained-package path: $Path"
-    }
-
-    $existingHash = (Get-FileHash -LiteralPath $Path -Algorithm SHA256).Hash.ToUpperInvariant()
-    if (-not [string]::Equals($existingHash, $ExpectedHash, [StringComparison]::Ordinal)) {
-        throw "A different file already exists at $Path. Move or rename it, then rerun the installer; the existing file was not changed."
-    }
-    return $true
-}
-
-function Publish-VerifiedArchive {
-    param(
-        [Parameter(Mandatory = $true)]
-        [string] $VerifiedArchivePath,
-
-        [Parameter(Mandatory = $true)]
-        [string] $ExpectedHash,
-
-        [Parameter(Mandatory = $true)]
-        [string] $DestinationDirectory
-    )
-
-    $destinationDirectoryPath = [IO.Path]::GetFullPath($DestinationDirectory)
-    $destinationPath = Join-Path $destinationDirectoryPath $AssetName
-    $stagingPath = $null
-
-    Assert-SafeArchiveDestinationDirectory -Path $destinationDirectoryPath
-    if (Test-ExistingVerifiedArchive -Path $destinationPath -ExpectedHash $ExpectedHash) {
-        return $destinationPath
-    }
-
-    try {
-        $stagingPath = Join-Path $destinationDirectoryPath ('.cleo-download-' + [Guid]::NewGuid().ToString('N') + '.tmp')
-        if (Test-Path -LiteralPath $stagingPath) {
-            throw "A unique retained-package staging path unexpectedly already exists: $stagingPath"
-        }
-
-        $sourceStream = $null
-        $destinationStream = $null
-        try {
-            $sourceStream = [IO.File]::Open(
-                $VerifiedArchivePath,
-                [IO.FileMode]::Open,
-                [IO.FileAccess]::Read,
-                [IO.FileShare]::Read
-            )
-            $destinationStream = [IO.File]::Open(
-                $stagingPath,
-                [IO.FileMode]::CreateNew,
-                [IO.FileAccess]::Write,
-                [IO.FileShare]::None
-            )
-            $sourceStream.CopyTo($destinationStream)
-            $destinationStream.Flush()
-        }
-        finally {
-            if ($null -ne $destinationStream) { $destinationStream.Dispose() }
-            if ($null -ne $sourceStream) { $sourceStream.Dispose() }
-        }
-
-        Assert-ArchiveChecksum -ArchivePath $stagingPath -ExpectedHash $ExpectedHash
-        Assert-SafeArchiveDestinationDirectory -Path $destinationDirectoryPath
-
-        # A matching file created during the copy is a harmless concurrent
-        # success. Any other collision is rejected without replacing it.
-        if (Test-ExistingVerifiedArchive -Path $destinationPath -ExpectedHash $ExpectedHash) {
-            return $destinationPath
-        }
-
-        try {
-            # The staging file and destination are in the same directory, so
-            # this rename publishes the fully written file atomically.
-            [IO.File]::Move($stagingPath, $destinationPath)
-        }
-        catch {
-            $moveError = $_
-            if (Test-ExistingVerifiedArchive -Path $destinationPath -ExpectedHash $ExpectedHash) {
-                return $destinationPath
-            }
-            throw "The verified release package could not be retained at $destinationPath : $($moveError.Exception.Message)"
-        }
-
-        if (-not (Test-ExistingVerifiedArchive -Path $destinationPath -ExpectedHash $ExpectedHash)) {
-            throw "The verified release package was not retained at $destinationPath"
-        }
-        return $destinationPath
-    }
-    finally {
-        if (-not [string]::IsNullOrWhiteSpace($stagingPath) -and
-            (Test-Path -LiteralPath $stagingPath)) {
-            try {
-                Remove-OwnedFile `
-                    -Path $stagingPath `
-                    -ExpectedParent $destinationDirectoryPath `
-                    -ExpectedPrefix '.cleo-download-'
-            }
-            catch {
-                Write-Warning "Could not clean up retained-package staging file $stagingPath : $($_.Exception.Message)"
             }
         }
     }
@@ -1210,6 +1040,10 @@ $failedDirectory = $null
 $shortcutParent = $null
 $temporaryShortcut = $null
 $backupShortcut = $null
+$migrationSourcePath = $null
+$migrationSourceParent = $null
+$migrationBackupDirectory = $null
+$migrationExpectedDisposition = $null
 
 try {
     $ErrorActionPreference = 'Stop'
@@ -1227,12 +1061,9 @@ try {
     }
     $windowsVersionDetails = Assert-SupportedWindowsVersion
 
-    if ([string]::IsNullOrWhiteSpace($InstallDirectory)) {
-        $localAppData = [Environment]::GetFolderPath([Environment+SpecialFolder]::LocalApplicationData)
-        if ([string]::IsNullOrWhiteSpace($localAppData)) {
-            throw 'Windows did not provide a Local AppData directory for the current user.'
-        }
-        $InstallDirectory = Join-Path (Join-Path $localAppData 'Programs') 'Cleo'
+    $usingDefaultInstallDirectory = [string]::IsNullOrWhiteSpace($InstallDirectory)
+    if ($usingDefaultInstallDirectory) {
+        $InstallDirectory = Get-DefaultCleoInstallDirectory
     }
     $installPath = Get-FileSystemPath -Path $InstallDirectory -Description 'InstallDirectory'
     $installRoot = [IO.Path]::GetPathRoot($installPath)
@@ -1246,16 +1077,35 @@ try {
     $installParent = $installParentInfo.FullName
     $installedExecutable = Join-Path $installPath $ExecutableName
 
-    if (Test-PathAtOrBelowDirectory -Path $originalWorkingDirectory -Directory $installPath) {
-        throw "The terminal's original working directory is the Cleo InstallDirectory or is inside it: $originalWorkingDirectory. Open a terminal in a directory outside $installPath, then rerun the installer so the retained ZIP remains separate from the managed installation."
-    }
-
     $initialDisposition = Get-InstallDisposition -Path $installPath -AllowUnmarked ([bool] $Force)
     if ($initialDisposition -eq 'Unmarked') {
         throw "The destination is not recorded as a Cleo installation for this user: $installPath. Ownership is stored at $OwnershipRegistryDisplayPath. Choose another InstallDirectory or rerun with -Force only if it is safe to replace that entire directory."
     }
     if ($initialDisposition -eq 'Legacy') {
         Write-Host 'An exact legacy four-file Cleo installation was detected and will be migrated.'
+    }
+
+    # Releases before the Desktop-folder installer used Local AppData. Migrate
+    # only a precisely recognized Cleo directory, and only when the new Desktop
+    # destination is new or empty. Unrecognized data is never removed.
+    if ($usingDefaultInstallDirectory -and
+        ($initialDisposition -eq 'New' -or $initialDisposition -eq 'Empty')) {
+        $previousDefaultPath = Get-PreviousDefaultCleoInstallDirectory
+        if (-not [string]::IsNullOrWhiteSpace($previousDefaultPath)) {
+            $previousDefaultPath = [IO.Path]::GetFullPath($previousDefaultPath)
+            if (-not (Test-SamePath -First $previousDefaultPath -Second $installPath) -and
+                (Test-Path -LiteralPath $previousDefaultPath -PathType Container)) {
+                $previousDisposition = Get-InstallDisposition `
+                    -Path $previousDefaultPath `
+                    -AllowUnmarked $false
+                if ($previousDisposition -eq 'Owned' -or $previousDisposition -eq 'Legacy') {
+                    $migrationSourcePath = $previousDefaultPath
+                    $migrationSourceParent = [IO.Directory]::GetParent($previousDefaultPath).FullName
+                    $migrationExpectedDisposition = $previousDisposition
+                    Write-Host "A previous Cleo installation will be moved from $migrationSourcePath to $installPath."
+                }
+            }
+        }
     }
 
     $shortcutPath = $null
@@ -1272,8 +1122,20 @@ try {
                 throw "The Start Menu shortcut path is not a file: $shortcutPath"
             }
             $shortcutTarget = Get-ShortcutTarget -ShortcutPath $shortcutPath
-            if (([string]::IsNullOrWhiteSpace($shortcutTarget) -or
-                -not (Test-SamePath -First $shortcutTarget -Second $installedExecutable)) -and
+            $shortcutMatchesDestination = $false
+            $shortcutMatchesMigrationSource = $false
+            if (-not [string]::IsNullOrWhiteSpace($shortcutTarget)) {
+                $shortcutMatchesDestination = Test-SamePath `
+                    -First $shortcutTarget `
+                    -Second $installedExecutable
+                if (-not [string]::IsNullOrWhiteSpace($migrationSourcePath)) {
+                    $shortcutMatchesMigrationSource = Test-SamePath `
+                        -First $shortcutTarget `
+                        -Second (Join-Path $migrationSourcePath $ExecutableName)
+                }
+            }
+            if (-not $shortcutMatchesDestination -and
+                -not $shortcutMatchesMigrationSource -and
                 -not $Force) {
                 throw "An existing Cleo Start Menu shortcut points somewhere else. Rerun with -NoShortcut, or use -Force only if that shortcut may be replaced."
             }
@@ -1346,20 +1208,21 @@ try {
     Assert-WindowsX64Executable -Path $extractedExecutable
     Write-Host 'Checksum and Windows package layout verified.'
 
-    $retainedArchivePath = Publish-VerifiedArchive `
-        -VerifiedArchivePath $archivePath `
-        -ExpectedHash $publishedHash `
-        -DestinationDirectory $originalWorkingDirectory
-    Write-Host "[OK] Verified package saved: $retainedArchivePath"
-
     [void] [IO.Directory]::CreateDirectory($installParent)
     $transactionId = [Guid]::NewGuid().ToString('N')
     $stagingDirectory = Join-Path $installParent ('.cleo-install-' + $transactionId)
     $backupDirectory = Join-Path $installParent ('.cleo-backup-' + $transactionId)
     $failedDirectory = Join-Path $installParent ('.cleo-failed-' + $transactionId)
+    if (-not [string]::IsNullOrWhiteSpace($migrationSourcePath)) {
+        $migrationBackupDirectory = Join-Path `
+            $migrationSourceParent `
+            ('.cleo-migration-backup-' + $transactionId)
+    }
     if ((Test-Path -LiteralPath $stagingDirectory) -or
         (Test-Path -LiteralPath $backupDirectory) -or
-        (Test-Path -LiteralPath $failedDirectory)) {
+        (Test-Path -LiteralPath $failedDirectory) -or
+        (-not [string]::IsNullOrWhiteSpace($migrationBackupDirectory) -and
+            (Test-Path -LiteralPath $migrationBackupDirectory))) {
         throw 'A unique installation transaction path unexpectedly already exists.'
     }
     [void] [IO.Directory]::CreateDirectory($stagingDirectory)
@@ -1384,20 +1247,33 @@ try {
     $newInstallMoved = $false
     $originalShortcutMoved = $false
     $newShortcutMoved = $false
+    $migrationSourceMoved = $false
     $ownershipWriteAttempted = $false
     $previousOwnershipState = Get-CleoOwnershipState
 
     # Re-read both the directory tree and the current-user ownership record at
     # the last possible point before an existing directory can be renamed.
     $finalDisposition = Get-InstallDisposition -Path $installPath -AllowUnmarked ([bool] $Force)
-    if ($finalDisposition -eq 'Unmarked') {
-        throw "InstallDirectory ownership changed during installation. Nothing was replaced. Use -Force only after checking the destination: $installPath"
+    if ($finalDisposition -ne $initialDisposition) {
+        throw "InstallDirectory changed during installation. Nothing was replaced: $installPath"
+    }
+    if (-not [string]::IsNullOrWhiteSpace($migrationSourcePath)) {
+        $finalMigrationDisposition = Get-InstallDisposition `
+            -Path $migrationSourcePath `
+            -AllowUnmarked $false
+        if ($finalMigrationDisposition -ne $migrationExpectedDisposition) {
+            throw "The previous Cleo installation changed during installation. Nothing was replaced: $migrationSourcePath"
+        }
     }
 
     try {
         if (Test-Path -LiteralPath $installPath -PathType Container) {
             [IO.Directory]::Move($installPath, $backupDirectory)
             $originalInstallMoved = $true
+        }
+        if (-not [string]::IsNullOrWhiteSpace($migrationSourcePath)) {
+            [IO.Directory]::Move($migrationSourcePath, $migrationBackupDirectory)
+            $migrationSourceMoved = $true
         }
         [IO.Directory]::Move($stagingDirectory, $installPath)
         $newInstallMoved = $true
@@ -1446,12 +1322,28 @@ try {
             if ($originalInstallMoved -and (Test-Path -LiteralPath $backupDirectory -PathType Container)) {
                 [IO.Directory]::Move($backupDirectory, $installPath)
             }
+        }
+        catch {
+            $rollbackProblems += "destination rollback: $($_.Exception.Message)"
+        }
+
+        try {
+            if ($migrationSourceMoved -and
+                (Test-Path -LiteralPath $migrationBackupDirectory -PathType Container)) {
+                [IO.Directory]::Move($migrationBackupDirectory, $migrationSourcePath)
+            }
+        }
+        catch {
+            $rollbackProblems += "previous-installation rollback: $($_.Exception.Message)"
+        }
+
+        try {
             if (Test-Path -LiteralPath $failedDirectory) {
                 Remove-OwnedDirectory -Path $failedDirectory -ExpectedParent $installParent -ExpectedPrefix '.cleo-failed-'
             }
         }
         catch {
-            $rollbackProblems += "application rollback: $($_.Exception.Message)"
+            $rollbackProblems += "failed-install cleanup: $($_.Exception.Message)"
         }
 
         $rollbackSuffix = ''
@@ -1475,6 +1367,17 @@ try {
         }
         catch {
             Write-Warning "Cleo was installed, but the previous shortcut backup could not be removed: $($_.Exception.Message)"
+        }
+    }
+    if ($migrationSourceMoved -and (Test-Path -LiteralPath $migrationBackupDirectory)) {
+        try {
+            Remove-OwnedDirectory `
+                -Path $migrationBackupDirectory `
+                -ExpectedParent $migrationSourceParent `
+                -ExpectedPrefix '.cleo-migration-backup-'
+        }
+        catch {
+            Write-Warning "Cleo was moved to the Desktop, but the previous installation backup could not be removed from $migrationBackupDirectory : $($_.Exception.Message)"
         }
     }
 

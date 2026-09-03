@@ -32,7 +32,6 @@ ASSET_NAME=""
 RELEASE_LABEL=""
 EXPECTED_SHA256=""
 
-ORIGINAL_WORKING_DIRECTORY=""
 WORK_DIR=""
 WORK_PARENT=""
 WORK_PREFIX=""
@@ -90,8 +89,8 @@ Usage:
 
 With no platform option, desktop Linux or macOS is detected automatically.
 Chromebook installation always requires --chromebook.
-For a normal installation, the verified release package is also kept in the
-directory where this command was started, before Cleo is installed normally.
+Normal installations use a private temporary workspace and remove the release
+package automatically after Cleo has been installed.
 
 Options:
   --linux            Require desktop Linux and install the Linux archive.
@@ -758,27 +757,6 @@ print_detection() {
   esac
 }
 
-capture_original_working_directory() {
-  local directory
-
-  directory=$(pwd -P 2>/dev/null) ||
-    die "Cannot identify the directory where this command was started."
-  case "$directory" in
-    /*) ;;
-    *) die "The original working directory is not an absolute path: $directory" ;;
-  esac
-  case "$directory" in
-    *$'\n'*|*$'\r'*)
-      die "The original working directory contains a line break and cannot be used safely."
-      ;;
-  esac
-  if ! { [ -d "$directory" ] && [ ! -L "$directory" ]; }; then
-    die "The original working directory is not a regular directory: $directory"
-  fi
-
-  ORIGINAL_WORKING_DIRECTORY="$directory"
-}
-
 create_work_directory() {
   local temporary_base
   local template
@@ -1413,125 +1391,6 @@ copy_download_only() {
   say "[OK] Saved: $destination"
   say "SHA-256: $EXPECTED_SHA256"
   say "Nothing was installed or launched."
-}
-
-retain_verified_package_in_original_directory() {
-  local source="$WORK_DIR/$ASSET_NAME"
-  local destination="$ORIGINAL_WORKING_DIRECTORY/$ASSET_NAME"
-  local existing_hash
-  local copied_hash
-
-  step "Saving the verified package in the original terminal directory"
-  if ! { [ -d "$ORIGINAL_WORKING_DIRECTORY" ] && \
-         [ ! -L "$ORIGINAL_WORKING_DIRECTORY" ]; }; then
-    die "The original working directory changed or is no longer safe: $ORIGINAL_WORKING_DIRECTORY"
-  fi
-
-  [ ! -L "$destination" ] ||
-    die "A symbolic link already exists at $destination. Move or rename it, then run the installer again."
-  [ ! -d "$destination" ] ||
-    die "A directory already exists at $destination. Move or rename it, then run the installer again."
-  if [ -e "$destination" ]; then
-    [ -f "$destination" ] ||
-      die "A non-regular file already exists at $destination. Move or rename it, then run the installer again."
-    existing_hash=$(file_sha256 "$destination") ||
-      die "Could not inspect the existing package destination: $destination"
-    if [ "$existing_hash" = "$EXPECTED_SHA256" ]; then
-      say "[OK] Verified package saved: $destination"
-      return
-    fi
-    die "A different package already exists at $destination. Move or rename it, then run the installer again."
-  fi
-
-  DOWNLOAD_STAGE=$(mktemp \
-    "$ORIGINAL_WORKING_DIRECTORY/.cleo-download.XXXXXXXX") ||
-    die "Could not create a package staging file in $ORIGINAL_WORKING_DIRECTORY."
-  if ! { [ -f "$DOWNLOAD_STAGE" ] && [ ! -L "$DOWNLOAD_STAGE" ]; }; then
-    die "The package staging file was not created safely."
-  fi
-  cp "$source" "$DOWNLOAD_STAGE" ||
-    die "Could not copy the verified package into the original working directory."
-  chmod 0644 "$DOWNLOAD_STAGE" ||
-    die "Could not set safe permissions on the retained package."
-  copied_hash=$(file_sha256 "$DOWNLOAD_STAGE") ||
-    die "Could not verify the retained package copy."
-  [ "$copied_hash" = "$EXPECTED_SHA256" ] ||
-    die "The retained package copy failed its final checksum verification."
-
-  # Stage on the destination filesystem and recheck every path immediately
-  # before publishing it. A same-hash existing package is kept above; every
-  # other collision is preserved for the user to move or rename explicitly.
-  if ! { [ -d "$ORIGINAL_WORKING_DIRECTORY" ] && \
-         [ ! -L "$ORIGINAL_WORKING_DIRECTORY" ]; }; then
-    die "The original working directory changed before the package was saved."
-  fi
-  if [ -e "$destination" ] || [ -L "$destination" ]; then
-    die "Another item appeared at $destination before it could be saved. Move or rename it, then run the installer again."
-  fi
-  if ! { [ -f "$DOWNLOAD_STAGE" ] && [ ! -L "$DOWNLOAD_STAGE" ]; }; then
-    die "The package staging file changed before replacement."
-  fi
-  copied_hash=$(file_sha256 "$DOWNLOAD_STAGE") ||
-    die "Could not recheck the retained package immediately before replacement."
-  [ "$copied_hash" = "$EXPECTED_SHA256" ] ||
-    die "The retained package changed immediately before replacement."
-
-  # A hard link publishes the fully verified same-filesystem staging inode in
-  # one operation and fails rather than overwriting any destination that races
-  # the checks above. Cleanup then removes only the private staging name.
-  if ! ln "$DOWNLOAD_STAGE" "$destination" 2>/dev/null; then
-    die "Could not save the verified package at $destination. If an item exists there, move or rename it and try again."
-  fi
-  if ! { [ -f "$destination" ] && [ ! -L "$destination" ]; }; then
-    die "The retained package destination is not a regular file after publication."
-  fi
-  copied_hash=$(file_sha256 "$destination") ||
-    die "Could not verify the retained package after publication."
-  [ "$copied_hash" = "$EXPECTED_SHA256" ] ||
-    die "The retained package failed verification after publication."
-
-  rm -f "$DOWNLOAD_STAGE" ||
-    die "The package was saved, but its private staging name could not be removed: $DOWNLOAD_STAGE"
-  DOWNLOAD_STAGE=""
-
-  say "[OK] Verified package saved: $destination"
-}
-
-preflight_macos_install_target_overlap() {
-  local user_home=${HOME:-}
-  local install_root
-  local canonical_install_root
-  local destination
-
-  [ -n "$user_home" ] ||
-    die "HOME is not set; a user-local macOS installation path cannot be selected."
-  case "$user_home" in
-    /*) ;;
-    *) die "HOME must be an absolute path for a safe user-local macOS installation." ;;
-  esac
-  case "$user_home" in
-    *$'\n'*|*$'\r'*)
-      die "HOME contains a line break and cannot be used safely."
-      ;;
-  esac
-
-  install_root="$user_home/Applications"
-  if [ ! -e "$install_root" ] && [ ! -L "$install_root" ]; then
-    return
-  fi
-  if ! { [ -d "$install_root" ] && [ ! -L "$install_root" ]; }; then
-    # The native install preflight reports the detailed unsafe-path error.
-    return
-  fi
-  canonical_install_root=$(cd "$install_root" 2>/dev/null && pwd -P) ||
-    die "Cannot inspect the user Applications folder: $install_root"
-  destination="$canonical_install_root/Cleo.app"
-
-  case "$ORIGINAL_WORKING_DIRECTORY" in
-    "$destination"|"$destination"/*)
-      die "The installer cannot run from inside $destination because replacing Cleo.app would remove the retained package. Open Terminal in another directory and run the command again."
-      ;;
-  esac
 }
 
 launch_linux_application() {
@@ -2358,7 +2217,6 @@ install_macos_package() {
 
 main() {
   umask 077
-  capture_original_working_directory
   parse_options "$@"
   detect_system
   validate_linux_userspace
@@ -2388,11 +2246,6 @@ main() {
     copy_download_only
     exit 0
   fi
-
-  if [ "$PLATFORM" = "macos" ]; then
-    preflight_macos_install_target_overlap
-  fi
-  retain_verified_package_in_original_directory
 
   case "$PLATFORM" in
     linux)      install_linux_archive ;;
