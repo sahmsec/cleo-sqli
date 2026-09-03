@@ -29,6 +29,11 @@ Choose your system—**Windows, Mac, Linux, or Chromebook**—in the
 [step-by-step installation guide](INSTALLATION.md). You do not need to know the processor: the
 guided installer selects the correct supported architecture and verifies the download.
 
+The guided installer keeps the checksum-verified release package in the folder where you run its
+terminal command and prints that package's absolute path. The installed app still goes to the
+normal location for your system; the ZIP, DMG, tarball, or DEB left in your chosen folder is your
+download copy to keep or delete later.
+
 ## Direct downloads
 
 Every button points to the latest release. Only the current version remains publicly listed;

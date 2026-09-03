@@ -7,7 +7,8 @@ Installs the current 64-bit Windows release of Cleo for the current user.
 The installer detects the native Windows architecture, resolves one immutable
 release tag, downloads the Windows ZIP and its published SHA-256 manifest,
 verifies both the checksum and archive layout, and installs Cleo without
-requesting elevation or changing PowerShell security settings.
+requesting elevation or changing PowerShell security settings. The verified
+release ZIP is retained in the terminal's original working directory.
 
 Rerunning the installer replaces a Cleo installation recorded for the current
 user. An exact four-file legacy Cleo installation is migrated automatically.
@@ -64,6 +65,28 @@ param(
 
 Set-StrictMode -Version 2.0
 
+function Test-PathContainsLineBreak {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string] $Path
+    )
+
+    return $Path.IndexOfAny([char[]] "`r`n") -ge 0
+}
+
+# Capture the caller's location before the installer creates or enters any
+# staging location. This is intentionally based on the PowerShell location,
+# not on the script file (which does not exist when invoked through irm | iex).
+$invocationLocation = Get-Location
+if ($null -eq $invocationLocation.Provider -or
+    $invocationLocation.Provider.Name -ne 'FileSystem') {
+    throw 'Run the Cleo installer from a file-system directory. The verified release package is retained in the directory where the terminal was opened.'
+}
+$originalWorkingDirectory = [IO.Path]::GetFullPath($invocationLocation.ProviderPath)
+if (Test-PathContainsLineBreak -Path $originalWorkingDirectory) {
+    throw 'The original working directory contains a line-break character and cannot be used as the retained-package destination.'
+}
+
 $Repository = 'sahmsec/cleo-sqli'
 $AssetName = 'Cleo-Windows-x64.zip'
 $ChecksumName = 'SHA256SUMS.txt'
@@ -89,6 +112,25 @@ function Test-SamePath {
         [IO.Path]::GetFullPath($Second).TrimEnd('\', '/'),
         [StringComparison]::OrdinalIgnoreCase
     )
+}
+
+function Test-PathAtOrBelowDirectory {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string] $Path,
+
+        [Parameter(Mandatory = $true)]
+        [string] $Directory
+    )
+
+    $fullPath = [IO.Path]::GetFullPath($Path).TrimEnd('\', '/')
+    $fullDirectory = [IO.Path]::GetFullPath($Directory).TrimEnd('\', '/')
+    if ([string]::Equals($fullPath, $fullDirectory, [StringComparison]::OrdinalIgnoreCase)) {
+        return $true
+    }
+
+    $directoryPrefix = $fullDirectory + [IO.Path]::DirectorySeparatorChar
+    return $fullPath.StartsWith($directoryPrefix, [StringComparison]::OrdinalIgnoreCase)
 }
 
 function Get-FileSystemPath {
@@ -581,6 +623,164 @@ function Assert-NoReparsePointTree {
     }
 }
 
+function Assert-SafeArchiveDestinationDirectory {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string] $Path
+    )
+
+    $fullPath = [IO.Path]::GetFullPath($Path)
+    if (-not (Test-Path -LiteralPath $fullPath -PathType Container)) {
+        throw "The original working directory no longer exists or is not a directory: $fullPath"
+    }
+
+    # Check the destination and each existing ancestor without traversing any
+    # unrelated children. A reparse point in this chain could redirect the
+    # retained download outside the directory the caller selected.
+    $currentPath = $fullPath
+    while ($true) {
+        $item = Get-Item -LiteralPath $currentPath -Force
+        if (-not $item.PSIsContainer) {
+            throw "The retained-package destination is not a directory: $currentPath"
+        }
+        if (($item.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0) {
+            throw "The retained-package destination cannot use a symbolic link, junction, or other reparse point: $currentPath"
+        }
+
+        $root = [IO.Path]::GetPathRoot($currentPath)
+        if ([string]::IsNullOrWhiteSpace($root) -or
+            (Test-SamePath -First $currentPath -Second $root)) {
+            break
+        }
+        $parent = [IO.Directory]::GetParent($currentPath)
+        if ($null -eq $parent) {
+            break
+        }
+        $currentPath = $parent.FullName
+    }
+}
+
+function Test-ExistingVerifiedArchive {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string] $Path,
+
+        [Parameter(Mandatory = $true)]
+        [string] $ExpectedHash
+    )
+
+    $existingItem = Get-Item -LiteralPath $Path -Force -ErrorAction SilentlyContinue
+    if ($null -eq $existingItem) {
+        return $false
+    }
+    if (($existingItem.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0) {
+        throw "Refusing to replace a symbolic link, junction, or other reparse point at the retained-package path: $Path"
+    }
+    if ($existingItem.PSIsContainer -or
+        -not (Test-Path -LiteralPath $Path -PathType Leaf)) {
+        throw "Refusing to replace a non-file item at the retained-package path: $Path"
+    }
+
+    $existingHash = (Get-FileHash -LiteralPath $Path -Algorithm SHA256).Hash.ToUpperInvariant()
+    if (-not [string]::Equals($existingHash, $ExpectedHash, [StringComparison]::Ordinal)) {
+        throw "A different file already exists at $Path. Move or rename it, then rerun the installer; the existing file was not changed."
+    }
+    return $true
+}
+
+function Publish-VerifiedArchive {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string] $VerifiedArchivePath,
+
+        [Parameter(Mandatory = $true)]
+        [string] $ExpectedHash,
+
+        [Parameter(Mandatory = $true)]
+        [string] $DestinationDirectory
+    )
+
+    $destinationDirectoryPath = [IO.Path]::GetFullPath($DestinationDirectory)
+    $destinationPath = Join-Path $destinationDirectoryPath $AssetName
+    $stagingPath = $null
+
+    Assert-SafeArchiveDestinationDirectory -Path $destinationDirectoryPath
+    if (Test-ExistingVerifiedArchive -Path $destinationPath -ExpectedHash $ExpectedHash) {
+        return $destinationPath
+    }
+
+    try {
+        $stagingPath = Join-Path $destinationDirectoryPath ('.cleo-download-' + [Guid]::NewGuid().ToString('N') + '.tmp')
+        if (Test-Path -LiteralPath $stagingPath) {
+            throw "A unique retained-package staging path unexpectedly already exists: $stagingPath"
+        }
+
+        $sourceStream = $null
+        $destinationStream = $null
+        try {
+            $sourceStream = [IO.File]::Open(
+                $VerifiedArchivePath,
+                [IO.FileMode]::Open,
+                [IO.FileAccess]::Read,
+                [IO.FileShare]::Read
+            )
+            $destinationStream = [IO.File]::Open(
+                $stagingPath,
+                [IO.FileMode]::CreateNew,
+                [IO.FileAccess]::Write,
+                [IO.FileShare]::None
+            )
+            $sourceStream.CopyTo($destinationStream)
+            $destinationStream.Flush()
+        }
+        finally {
+            if ($null -ne $destinationStream) { $destinationStream.Dispose() }
+            if ($null -ne $sourceStream) { $sourceStream.Dispose() }
+        }
+
+        Assert-ArchiveChecksum -ArchivePath $stagingPath -ExpectedHash $ExpectedHash
+        Assert-SafeArchiveDestinationDirectory -Path $destinationDirectoryPath
+
+        # A matching file created during the copy is a harmless concurrent
+        # success. Any other collision is rejected without replacing it.
+        if (Test-ExistingVerifiedArchive -Path $destinationPath -ExpectedHash $ExpectedHash) {
+            return $destinationPath
+        }
+
+        try {
+            # The staging file and destination are in the same directory, so
+            # this rename publishes the fully written file atomically.
+            [IO.File]::Move($stagingPath, $destinationPath)
+        }
+        catch {
+            $moveError = $_
+            if (Test-ExistingVerifiedArchive -Path $destinationPath -ExpectedHash $ExpectedHash) {
+                return $destinationPath
+            }
+            throw "The verified release package could not be retained at $destinationPath : $($moveError.Exception.Message)"
+        }
+
+        if (-not (Test-ExistingVerifiedArchive -Path $destinationPath -ExpectedHash $ExpectedHash)) {
+            throw "The verified release package was not retained at $destinationPath"
+        }
+        return $destinationPath
+    }
+    finally {
+        if (-not [string]::IsNullOrWhiteSpace($stagingPath) -and
+            (Test-Path -LiteralPath $stagingPath)) {
+            try {
+                Remove-OwnedFile `
+                    -Path $stagingPath `
+                    -ExpectedParent $destinationDirectoryPath `
+                    -ExpectedPrefix '.cleo-download-'
+            }
+            catch {
+                Write-Warning "Could not clean up retained-package staging file $stagingPath : $($_.Exception.Message)"
+            }
+        }
+    }
+}
+
 function Get-CleoOwnershipState {
     $baseKey = $null
     $ownershipKey = $null
@@ -1046,6 +1246,10 @@ try {
     $installParent = $installParentInfo.FullName
     $installedExecutable = Join-Path $installPath $ExecutableName
 
+    if (Test-PathAtOrBelowDirectory -Path $originalWorkingDirectory -Directory $installPath) {
+        throw "The terminal's original working directory is the Cleo InstallDirectory or is inside it: $originalWorkingDirectory. Open a terminal in a directory outside $installPath, then rerun the installer so the retained ZIP remains separate from the managed installation."
+    }
+
     $initialDisposition = Get-InstallDisposition -Path $installPath -AllowUnmarked ([bool] $Force)
     if ($initialDisposition -eq 'Unmarked') {
         throw "The destination is not recorded as a Cleo installation for this user: $installPath. Ownership is stored at $OwnershipRegistryDisplayPath. Choose another InstallDirectory or rerun with -Force only if it is safe to replace that entire directory."
@@ -1141,6 +1345,12 @@ try {
     Expand-VerifiedCleoArchive -ArchivePath $archivePath -DestinationPath $extractedExecutable
     Assert-WindowsX64Executable -Path $extractedExecutable
     Write-Host 'Checksum and Windows package layout verified.'
+
+    $retainedArchivePath = Publish-VerifiedArchive `
+        -VerifiedArchivePath $archivePath `
+        -ExpectedHash $publishedHash `
+        -DestinationDirectory $originalWorkingDirectory
+    Write-Host "[OK] Verified package saved: $retainedArchivePath"
 
     [void] [IO.Directory]::CreateDirectory($installParent)
     $transactionId = [Guid]::NewGuid().ToString('N')
