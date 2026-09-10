@@ -1,7 +1,7 @@
 #requires -Version 5.1
 <#
 .SYNOPSIS
-Installs the current 64-bit Windows release of Cleo for the current user.
+Installs the matching native 64-bit Windows release of Cleo for the current user.
 
 .DESCRIPTION
 The installer detects the native Windows architecture, resolves one immutable
@@ -25,7 +25,7 @@ Destination directory. The default is
 the current user's Windows Desktop\Cleo folder.
 
 .PARAMETER AssetDirectory
-Offline/test source directory containing Cleo-Windows-x64.zip and
+Offline/test source directory containing the matching Cleo Windows ZIP and
 SHA256SUMS.txt. When supplied, no network request is made.
 
 .PARAMETER NoShortcut
@@ -66,7 +66,7 @@ param(
 Set-StrictMode -Version 2.0
 
 $Repository = 'sahmsec/cleo-sqli'
-$AssetName = 'Cleo-Windows-x64.zip'
+$AssetName = $null
 $ChecksumName = 'SHA256SUMS.txt'
 $ExecutableName = 'Cleo.exe'
 $InstallerPrefix = 'cleo-installer-'
@@ -224,7 +224,7 @@ namespace CleoInstaller
             $architecture = [Runtime.InteropServices.RuntimeInformation]::OSArchitecture.ToString()
         }
         catch {
-            throw 'Windows architecture could not be detected safely. Cleo currently provides a Windows x64 build only.'
+            throw 'Windows architecture could not be detected safely. Cleo requires a supported 64-bit Windows architecture.'
         }
     }
 
@@ -528,10 +528,14 @@ function Expand-VerifiedCleoArchive {
     }
 }
 
-function Assert-WindowsX64Executable {
+function Assert-WindowsExecutableArchitecture {
     param(
         [Parameter(Mandatory = $true)]
-        [string] $Path
+        [string] $Path,
+
+        [Parameter()]
+        [ValidateSet('x64', 'arm64')]
+        [string] $ExpectedArchitecture
     )
 
     $stream = $null
@@ -562,12 +566,21 @@ function Assert-WindowsX64Executable {
             throw 'the PE signature is invalid'
         }
         [UInt16] $machine = $reader.ReadUInt16()
-        if ($machine -ne 0x8664) {
-            throw ('the PE machine type is 0x{0:x4}, not AMD64 (0x8664)' -f $machine)
+        $actualArchitecture = switch ($machine) {
+            0x8664 { 'x64' }
+            0xaa64 { 'arm64' }
+            default { $null }
+        }
+        if ([string]::IsNullOrWhiteSpace($actualArchitecture)) {
+            throw ('the PE machine type 0x{0:x4} is not supported' -f $machine)
+        }
+        if (-not [string]::IsNullOrWhiteSpace($ExpectedArchitecture) -and
+            $actualArchitecture -ne $ExpectedArchitecture) {
+            throw "the PE architecture is $actualArchitecture, not $ExpectedArchitecture"
         }
     }
     catch {
-        throw "The packaged Cleo.exe is not a valid native Windows x64 executable: $($_.Exception.Message). The file was not installed."
+        throw "The packaged Cleo.exe is not a valid supported native Windows executable: $($_.Exception.Message). The file was not installed."
     }
     finally {
         if ($null -ne $reader) {
@@ -861,7 +874,7 @@ function Test-ExactLegacyInstall {
     }
 
     try {
-        Assert-WindowsX64Executable -Path (Join-Path $Path $ExecutableName)
+        Assert-WindowsExecutableArchitecture -Path (Join-Path $Path $ExecutableName)
         return $true
     }
     catch {
@@ -1050,16 +1063,17 @@ try {
     $ProgressPreference = 'SilentlyContinue'
 
     $nativeArchitecture = Get-NativeWindowsArchitecture
-    if ($nativeArchitecture -ne 'x64') {
-        if ($nativeArchitecture -eq 'arm64' -or $nativeArchitecture -eq 'arm') {
-            throw "This Windows device uses $nativeArchitecture. Cleo currently provides a Windows x64 build only; do not install the Chromebook/Linux ARM package on Windows."
-        }
-        if ($nativeArchitecture -eq 'x86') {
-            throw 'This device is running 32-bit Windows. Cleo requires 64-bit Windows (x64).'
-        }
-        throw "Unsupported Windows architecture '$nativeArchitecture'. Cleo currently provides a Windows x64 build only."
+    switch ($nativeArchitecture) {
+        'x64' { $AssetName = 'Cleo-Windows-x64.zip' }
+        'arm64' { $AssetName = 'Cleo-Windows-arm64.zip' }
+        'x86' { throw 'This device is running 32-bit Windows. Cleo requires 64-bit Windows (x64 or ARM64).' }
+        'arm' { throw 'This device is running 32-bit Windows on ARM. Cleo requires 64-bit Windows on ARM64.' }
+        default { throw "Unsupported Windows architecture '$nativeArchitecture'. Cleo supports native x64 and ARM64 Windows devices." }
     }
     $windowsVersionDetails = Assert-SupportedWindowsVersion
+    if ($nativeArchitecture -eq 'arm64' -and $windowsVersionDetails.Build -lt 22000) {
+        throw 'Windows ARM64 requires Windows 11 (build 22000 or newer).'
+    }
 
     $usingDefaultInstallDirectory = [string]::IsNullOrWhiteSpace($InstallDirectory)
     if ($usingDefaultInstallDirectory) {
@@ -1205,7 +1219,9 @@ try {
 
     $extractedExecutable = Join-Path $temporaryRoot $ExecutableName
     Expand-VerifiedCleoArchive -ArchivePath $archivePath -DestinationPath $extractedExecutable
-    Assert-WindowsX64Executable -Path $extractedExecutable
+    Assert-WindowsExecutableArchitecture `
+        -Path $extractedExecutable `
+        -ExpectedArchitecture $nativeArchitecture
     Write-Host 'Checksum and Windows package layout verified.'
 
     [void] [IO.Directory]::CreateDirectory($installParent)

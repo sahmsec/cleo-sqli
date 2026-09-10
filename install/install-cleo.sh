@@ -2205,13 +2205,21 @@ install_macos_package() {
   say "[OK] Installed: $MAC_DESTINATION"
 
   if [ "$NO_LAUNCH" -eq 1 ]; then
-    say "Launch skipped because --no-launch was used."
-  elif open "$MAC_DESTINATION"; then
-    say "Cleo is starting."
-    say "If macOS blocks the first launch, use System Settings > Privacy & Security > Open Anyway."
+    say "Finder reveal and launch skipped because --no-launch was used."
   else
-    say "Cleo is installed, but macOS could not open it automatically."
-    say "Open it later from: $MAC_DESTINATION"
+    if open -R "$MAC_DESTINATION"; then
+      say "Cleo was revealed in Finder."
+    else
+      say "Cleo is installed, but Finder could not reveal it automatically."
+    fi
+    if open "$MAC_DESTINATION"; then
+      say "Cleo is starting."
+    else
+      say "Cleo is installed, but macOS did not open it automatically."
+    fi
+    say "Installed application: $MAC_DESTINATION"
+    say 'Launch it later with: open "$HOME/Applications/Cleo.app"'
+    say "If macOS blocks the first launch, use System Settings > Privacy & Security > Open Anyway, then open Cleo again."
   fi
 }
 
