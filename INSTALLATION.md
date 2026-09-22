@@ -23,7 +23,7 @@ temporary workspace and removes the temporary release package automatically. Use
 
 | System | Guided installation location |
 |:--|:--|
-| Windows | The current user's real `Desktop\Cleo\Cleo.exe`, including a redirected or OneDrive Desktop |
+| Windows | The current user's real `Desktop\Cleo.exe`, including a redirected or OneDrive Desktop |
 | macOS | `~/Applications/Cleo.app` |
 | Linux | `~/.local/share/cleo/Cleo`, plus a command and application-menu launcher |
 | Chromebook | Debian-managed `/usr/bin/cleo` and launcher files |
@@ -42,10 +42,9 @@ Open Terminal or Windows PowerShell and run:
 irm https://raw.githubusercontent.com/sahmsec/cleo-sqli/main/install/install-windows.ps1 | iex
 ```
 
-The installer detects x64 versus ARM64, downloads the matching ZIP, verifies it, installs the one
-`Cleo.exe` file under `Desktop\Cleo`, creates a Start-menu shortcut, and opens Cleo. Rerun the same
-command to update. It also safely migrates a recognized older installation from
-`%LOCALAPPDATA%\Programs\Cleo`.
+The installer detects x64 versus ARM64, downloads the matching ZIP, verifies it, places the one
+`Cleo.exe` file directly on the Desktop (not inside another folder), creates a Start-menu shortcut,
+and opens Cleo. Rerun the same command to update.
 
 If policy blocks PowerShell scripts, do not change the policy. Use the manual ZIP method.
 
@@ -57,6 +56,8 @@ In **Settings → System → About**, check **System type**, then download the m
 - [Windows ARM64 ZIP](https://github.com/sahmsec/cleo-sqli/releases/latest/download/Cleo-Windows-arm64.zip)
 
 Extract the ZIP before opening `Cleo.exe`; do not run it from inside the ZIP.
+Windows 10 and Windows 11 both include ZIP extraction in File Explorer, so no third-party unzip
+program is required. Right-click the downloaded ZIP, select **Extract All**, and follow the prompt.
 
 The free classroom build is not commercially code-signed. Defender SmartScreen may ask you to
 confirm the first launch. Verify the source and checksum before selecting **More info → Run
@@ -64,7 +65,7 @@ anyway**, and follow organizational policy on managed devices.
 
 ### Remove Windows installation
 
-Close Cleo, delete `Desktop\Cleo`, and remove the **Cleo** Start-menu shortcut. To remove the
+Close Cleo, delete `Desktop\Cleo.exe`, and remove the **Cleo** Start-menu shortcut. To remove the
 installer's per-user ownership record, run:
 
 ```powershell
