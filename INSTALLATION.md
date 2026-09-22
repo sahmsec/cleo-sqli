@@ -43,8 +43,8 @@ irm https://raw.githubusercontent.com/sahmsec/cleo-sqli/main/install/install-win
 ```
 
 The installer detects x64 versus ARM64, downloads the matching ZIP, verifies it, places the one
-`Cleo.exe` file directly on the Desktop (not inside another folder), creates or refreshes the
-Start-menu shortcut, and opens Cleo. Rerun the same command to update.
+`Cleo.exe` file directly on the Desktop (not inside another folder), and opens Cleo. It does not
+create a shortcut. Rerun the same command to update.
 
 If policy blocks PowerShell scripts, do not change the policy. Use the manual ZIP method.
 
@@ -65,8 +65,7 @@ anyway**, and follow organizational policy on managed devices.
 
 ### Remove Windows installation
 
-Close Cleo, delete `Desktop\Cleo.exe`, and remove the **Cleo** Start-menu shortcut. To remove the
-installer's per-user ownership record, run:
+Close Cleo and delete `Desktop\Cleo.exe`. To remove the installer's per-user ownership record, run:
 
 ```powershell
 reg.exe delete 'HKCU\Software\sahmsec\Cleo\Installer' /f /reg:64

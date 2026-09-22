@@ -28,9 +28,6 @@ Windows Desktop, so Cleo.exe appears directly on the Desktop.
 Offline/test source directory containing the matching Cleo Windows ZIP and
 SHA256SUMS.txt. When supplied, no network request is made.
 
-.PARAMETER NoShortcut
-Do not create or update the current user's Start Menu shortcut.
-
 .PARAMETER NoLaunch
 Do not start Cleo after installation.
 
@@ -52,9 +49,6 @@ param(
 
     [Parameter()]
     [string] $AssetDirectory,
-
-    [Parameter()]
-    [switch] $NoShortcut,
 
     [Parameter()]
     [switch] $NoLaunch,
@@ -834,43 +828,6 @@ function Get-ExecutableDisposition {
     return 'Unmarked'
 }
 
-function New-CleoShortcut {
-    param(
-        [Parameter(Mandatory = $true)]
-        [string] $ShortcutPath,
-
-        [Parameter(Mandatory = $true)]
-        [string] $ExecutablePath,
-
-        [Parameter(Mandatory = $true)]
-        [string] $WorkingDirectory
-    )
-
-    $shell = $null
-    $shortcut = $null
-    try {
-        $shell = New-Object -ComObject WScript.Shell
-        $shortcut = $shell.CreateShortcut($ShortcutPath)
-        $shortcut.TargetPath = $ExecutablePath
-        $shortcut.WorkingDirectory = $WorkingDirectory
-        $shortcut.IconLocation = "$ExecutablePath,0"
-        $shortcut.Description = 'Cleo authorized security testing tool'
-        $shortcut.Save()
-    }
-    finally {
-        if ($null -ne $shortcut -and [Runtime.InteropServices.Marshal]::IsComObject($shortcut)) {
-            [void] [Runtime.InteropServices.Marshal]::FinalReleaseComObject($shortcut)
-        }
-        if ($null -ne $shell -and [Runtime.InteropServices.Marshal]::IsComObject($shell)) {
-            [void] [Runtime.InteropServices.Marshal]::FinalReleaseComObject($shell)
-        }
-    }
-
-    if (-not (Test-Path -LiteralPath $ShortcutPath -PathType Leaf)) {
-        throw 'Windows did not create the Start Menu shortcut.'
-    }
-}
-
 function Remove-OwnedDirectory {
     param(
         [Parameter(Mandatory = $true)]
@@ -937,9 +894,6 @@ $installPath = $null
 $stagingExecutable = $null
 $backupExecutable = $null
 $failedExecutable = $null
-$shortcutParent = $null
-$temporaryShortcut = $null
-$backupShortcut = $null
 
 try {
     $ErrorActionPreference = 'Stop'
@@ -982,22 +936,6 @@ try {
         -AllowUnmarked ([bool] $Force)
     if ($initialDisposition -eq 'Unmarked') {
         throw "The destination file is not recorded as a Cleo installation for this user: $installedExecutable. Ownership is stored at $OwnershipRegistryDisplayPath. Choose another InstallDirectory or rerun with -Force only if it is safe to replace that file."
-    }
-
-    $shortcutPath = $null
-    if (-not $NoShortcut) {
-        $shortcutParent = [Environment]::GetFolderPath([Environment+SpecialFolder]::Programs)
-        if ([string]::IsNullOrWhiteSpace($shortcutParent)) {
-            throw 'Windows did not provide a Start Menu Programs directory for the current user.'
-        }
-        $shortcutParent = [IO.Path]::GetFullPath($shortcutParent)
-        $shortcutPath = Join-Path $shortcutParent 'Cleo.lnk'
-        if (Test-Path -LiteralPath $shortcutPath) {
-            Assert-NoReparsePointTree -Path $shortcutPath -Description 'Cleo Start Menu shortcut'
-            if (-not (Test-Path -LiteralPath $shortcutPath -PathType Leaf)) {
-                throw "The Start Menu shortcut path is not a file: $shortcutPath"
-            }
-        }
     }
 
     $temporaryBase = [IO.Path]::GetFullPath([IO.Path]::GetTempPath())
@@ -1080,25 +1018,8 @@ try {
     }
     Copy-Item -LiteralPath $extractedExecutable -Destination $stagingExecutable
 
-    $temporaryShortcut = $null
-    $backupShortcut = $null
-    if (-not $NoShortcut) {
-        [void] [IO.Directory]::CreateDirectory($shortcutParent)
-        $temporaryShortcut = Join-Path $shortcutParent ('Cleo.install-' + $transactionId + '.lnk')
-        $backupShortcut = Join-Path $shortcutParent ('Cleo.backup-' + $transactionId + '.lnk')
-        if ((Test-Path -LiteralPath $temporaryShortcut) -or (Test-Path -LiteralPath $backupShortcut)) {
-            throw 'A unique shortcut transaction path unexpectedly already exists.'
-        }
-        New-CleoShortcut `
-            -ShortcutPath $temporaryShortcut `
-            -ExecutablePath $installedExecutable `
-            -WorkingDirectory $installPath
-    }
-
     $originalExecutableMoved = $false
     $newExecutableMoved = $false
-    $originalShortcutMoved = $false
-    $newShortcutMoved = $false
     $ownershipWriteAttempted = $false
     $previousOwnershipState = Get-CleoOwnershipState
 
@@ -1118,15 +1039,6 @@ try {
         [IO.File]::Move($stagingExecutable, $installedExecutable)
         $newExecutableMoved = $true
 
-        if (-not $NoShortcut) {
-            if (Test-Path -LiteralPath $shortcutPath -PathType Leaf) {
-                [IO.File]::Move($shortcutPath, $backupShortcut)
-                $originalShortcutMoved = $true
-            }
-            [IO.File]::Move($temporaryShortcut, $shortcutPath)
-            $newShortcutMoved = $true
-        }
-
         $ownershipWriteAttempted = $true
         Set-CleoOwnershipState -InstallPath $installedExecutable
     }
@@ -1141,18 +1053,6 @@ try {
             catch {
                 $rollbackProblems += "ownership rollback: $($_.Exception.Message)"
             }
-        }
-
-        try {
-            if ($newShortcutMoved -and (Test-Path -LiteralPath $shortcutPath -PathType Leaf)) {
-                Remove-Item -LiteralPath $shortcutPath -Force
-            }
-            if ($originalShortcutMoved -and (Test-Path -LiteralPath $backupShortcut -PathType Leaf)) {
-                [IO.File]::Move($backupShortcut, $shortcutPath)
-            }
-        }
-        catch {
-            $rollbackProblems += "shortcut rollback: $($_.Exception.Message)"
         }
 
         try {
@@ -1191,18 +1091,7 @@ try {
             Write-Warning "Cleo was installed, but the previous version could not be removed from $backupExecutable : $($_.Exception.Message)"
         }
     }
-    if ($originalShortcutMoved -and (Test-Path -LiteralPath $backupShortcut)) {
-        try {
-            Remove-OwnedFile -Path $backupShortcut -ExpectedParent $shortcutParent -ExpectedPrefix 'Cleo.backup-'
-        }
-        catch {
-            Write-Warning "Cleo was installed, but the previous shortcut backup could not be removed: $($_.Exception.Message)"
-        }
-    }
     Write-Host "Cleo $releaseTag was installed at $installedExecutable"
-    if (-not $NoShortcut) {
-        Write-Host 'A Cleo shortcut was added to your Start Menu.'
-    }
 
     if (-not $NoLaunch) {
         try {
@@ -1210,23 +1099,13 @@ try {
         }
         catch {
             Write-Warning "Cleo was installed successfully but could not be started automatically: $($_.Exception.Message)"
-            Write-Host "Start it from the Start Menu or run: $installedExecutable"
+            Write-Host "Run it directly from the Desktop: $installedExecutable"
         }
     }
 }
 finally {
     if ($securityProtocolWasChanged) {
         [Net.ServicePointManager]::SecurityProtocol = $previousSecurityProtocol
-    }
-
-    if (-not [string]::IsNullOrWhiteSpace($temporaryShortcut) -and
-        -not [string]::IsNullOrWhiteSpace($shortcutParent)) {
-        try {
-            Remove-OwnedFile -Path $temporaryShortcut -ExpectedParent $shortcutParent -ExpectedPrefix 'Cleo.install-'
-        }
-        catch {
-            Write-Warning "Could not clean up temporary shortcut $temporaryShortcut : $($_.Exception.Message)"
-        }
     }
 
     if (-not [string]::IsNullOrWhiteSpace($stagingExecutable) -and
