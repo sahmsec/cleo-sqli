@@ -43,8 +43,8 @@ irm https://raw.githubusercontent.com/sahmsec/cleo-sqli/main/install/install-win
 ```
 
 The installer detects x64 versus ARM64, downloads the matching ZIP, verifies it, places the one
-`Cleo.exe` file directly on the Desktop (not inside another folder), creates a Start-menu shortcut,
-and opens Cleo. Rerun the same command to update.
+`Cleo.exe` file directly on the Desktop (not inside another folder), creates or refreshes the
+Start-menu shortcut, and opens Cleo. Rerun the same command to update.
 
 If policy blocks PowerShell scripts, do not change the policy. Use the manual ZIP method.
 

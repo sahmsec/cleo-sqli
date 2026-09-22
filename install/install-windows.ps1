@@ -13,8 +13,7 @@ is removed after installation.
 
 Rerunning the installer replaces a Cleo executable recorded for the current
 user.
--Force is needed when the destination executable is unmarked or when an
-existing Start Menu shortcut points somewhere else.
+-Force is needed when the destination executable is unmarked.
 
 .PARAMETER Version
 Release version to request in MAJOR.MINOR.PATCH form, with an optional leading
@@ -36,7 +35,7 @@ Do not create or update the current user's Start Menu shortcut.
 Do not start Cleo after installation.
 
 .PARAMETER Force
-Allow replacement of an unrecognized destination executable or shortcut.
+Allow replacement of an unrecognized destination executable.
 
 .NOTES
 If Windows or an organization policy blocks PowerShell scripts, do not change
@@ -835,32 +834,6 @@ function Get-ExecutableDisposition {
     return 'Unmarked'
 }
 
-function Get-ShortcutTarget {
-    param(
-        [Parameter(Mandatory = $true)]
-        [string] $ShortcutPath
-    )
-
-    $shell = $null
-    $shortcut = $null
-    try {
-        $shell = New-Object -ComObject WScript.Shell
-        $shortcut = $shell.CreateShortcut($ShortcutPath)
-        return [string] $shortcut.TargetPath
-    }
-    catch {
-        return $null
-    }
-    finally {
-        if ($null -ne $shortcut -and [Runtime.InteropServices.Marshal]::IsComObject($shortcut)) {
-            [void] [Runtime.InteropServices.Marshal]::FinalReleaseComObject($shortcut)
-        }
-        if ($null -ne $shell -and [Runtime.InteropServices.Marshal]::IsComObject($shell)) {
-            [void] [Runtime.InteropServices.Marshal]::FinalReleaseComObject($shell)
-        }
-    }
-}
-
 function New-CleoShortcut {
     param(
         [Parameter(Mandatory = $true)]
@@ -1023,17 +996,6 @@ try {
             Assert-NoReparsePointTree -Path $shortcutPath -Description 'Cleo Start Menu shortcut'
             if (-not (Test-Path -LiteralPath $shortcutPath -PathType Leaf)) {
                 throw "The Start Menu shortcut path is not a file: $shortcutPath"
-            }
-            $shortcutTarget = Get-ShortcutTarget -ShortcutPath $shortcutPath
-            $shortcutMatchesDestination = $false
-            if (-not [string]::IsNullOrWhiteSpace($shortcutTarget)) {
-                $shortcutMatchesDestination = Test-SamePath `
-                    -First $shortcutTarget `
-                    -Second $installedExecutable
-            }
-            if (-not $shortcutMatchesDestination -and
-                -not $Force) {
-                throw "An existing Cleo Start Menu shortcut points somewhere else. Rerun with -NoShortcut, or use -Force only if that shortcut may be replaced."
             }
         }
     }
