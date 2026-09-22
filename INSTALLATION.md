@@ -39,7 +39,7 @@ supported.
 Open Terminal or Windows PowerShell and run:
 
 ```powershell
-irm https://raw.githubusercontent.com/sahmsec/cleo-sqli/refs/heads/main/install/install-windows.ps1 | iex
+irm https://raw.githubusercontent.com/sahmsec/cleo-sqli/main/install/install-windows.ps1 | iex
 ```
 
 The installer detects x64 versus ARM64, downloads the matching ZIP, verifies it, places the one
