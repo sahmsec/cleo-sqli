@@ -94,7 +94,7 @@ package automatically after Cleo has been installed.
 
 Options:
   --linux            Require desktop Linux and install the Linux archive.
-  --macos            Require macOS and install the Apple Silicon disk image.
+  --macos            Require macOS and install the matching disk image.
   --chromebook        Install the Chromebook .deb package. Use this only in
                       the Chromebook Linux Terminal.
   --asset-dir DIR     Use an already-downloaded package and SHA256SUMS.txt
@@ -684,7 +684,7 @@ detect_system() {
           if [ "$native_arm64" = "1" ]; then
             ARCHITECTURE="arm64"
           else
-            die "This is an Intel Mac. The current Cleo macOS release supports Apple Silicon (M1 or newer) only."
+            ARCHITECTURE="x64"
           fi
           ;;
         *)
@@ -692,7 +692,10 @@ detect_system() {
           ;;
       esac
       PLATFORM="macos"
-      ARCHITECTURE_LABEL="Apple Silicon (arm64)"
+      case "$ARCHITECTURE" in
+        arm64) ARCHITECTURE_LABEL="Apple Silicon (arm64)" ;;
+        x64) ARCHITECTURE_LABEL="Intel 64-bit (x64)" ;;
+      esac
       ;;
     *)
       die "This installer supports Linux, Chromebook Linux, and macOS. Detected system: $kernel."
@@ -704,6 +707,7 @@ detect_system() {
     linux:arm64)        ASSET_NAME="Cleo-Linux-arm64.tar.gz" ;;
     chromebook:x64)     ASSET_NAME="Cleo-Chromebook-x64.deb" ;;
     chromebook:arm64)   ASSET_NAME="Cleo-Chromebook-arm64.deb" ;;
+    macos:x64)          ASSET_NAME="Cleo-macOS-Intel.dmg" ;;
     macos:arm64)        ASSET_NAME="Cleo-macOS-Apple-Silicon.dmg" ;;
     *)                  die "No Cleo package matches $PLATFORM on $ARCHITECTURE." ;;
   esac
@@ -1268,6 +1272,7 @@ validate_macos_app() {
   local bundle_executable
   local bundle_identifier
   local architectures
+  local expected_architecture
 
   if ! { [ -d "$application" ] && [ ! -L "$application" ]; }; then
     die "The disk image does not contain a regular Cleo.app bundle."
@@ -1305,9 +1310,14 @@ validate_macos_app() {
     die "Cleo.app failed its internal code-signature verification."
   architectures=$(lipo -archs "$executable" 2>/dev/null) ||
     die "Could not inspect the Cleo.app executable architecture."
+  case "$ARCHITECTURE" in
+    x64) expected_architecture="x86_64" ;;
+    arm64) expected_architecture="arm64" ;;
+    *) die "Internal error: unsupported macOS architecture '$ARCHITECTURE'." ;;
+  esac
   case " $architectures " in
-    *" arm64 "*) ;;
-    *) die "Cleo.app is not an Apple Silicon application." ;;
+    *" $expected_architecture "*) ;;
+    *) die "Cleo.app does not contain the expected $expected_architecture executable." ;;
   esac
 }
 

@@ -23,8 +23,8 @@ Choose Windows, macOS, Linux, or Chromebook here:
 
 ### [INSTALLATION GUIDE](INSTALLATION.md)
 
-The guided Windows, Linux, and Chromebook installers select the supported CPU package
-automatically. The macOS command installs Cleo for the current user and reveals it in Finder.
+The guided installers select the supported CPU package automatically. The macOS command installs
+Cleo for the current user and reveals it in Finder.
 
 ## Direct downloads
 
@@ -32,7 +32,8 @@ automatically. The macOS command installs Cleo for the current user and reveals 
 |:--|:--|:--:|
 | Windows | Windows 10 22H2/11, 64-bit Intel or AMD | [x64 ZIP](https://github.com/sahmsec/cleo-sqli/releases/latest/download/Cleo-Windows-x64.zip) |
 | Windows | Windows 11 on ARM64 | [ARM64 ZIP](https://github.com/sahmsec/cleo-sqli/releases/latest/download/Cleo-Windows-arm64.zip) |
-| macOS | macOS 11+, Apple Silicon | [Apple Silicon DMG](https://github.com/sahmsec/cleo-sqli/releases/latest/download/Cleo-macOS-Apple-Silicon.dmg) |
+| macOS | macOS 14+, Apple Silicon | [Apple Silicon DMG](https://github.com/sahmsec/cleo-sqli/releases/latest/download/Cleo-macOS-Apple-Silicon.dmg) |
+| macOS | macOS 14+, supported 64-bit Intel Mac (generally 2018+) | [Intel DMG](https://github.com/sahmsec/cleo-sqli/releases/latest/download/Cleo-macOS-Intel.dmg) |
 | Linux | 64-bit Intel/AMD glibc desktop | [x64 tarball](https://github.com/sahmsec/cleo-sqli/releases/latest/download/Cleo-Linux-x64.tar.gz) |
 | Linux | 64-bit ARM glibc desktop | [ARM64 tarball](https://github.com/sahmsec/cleo-sqli/releases/latest/download/Cleo-Linux-arm64.tar.gz) |
 | Chromebook | Intel/AMD Linux environment | [amd64 DEB](https://github.com/sahmsec/cleo-sqli/releases/latest/download/Cleo-Chromebook-x64.deb) |

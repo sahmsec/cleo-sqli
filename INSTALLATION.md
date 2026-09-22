@@ -23,7 +23,7 @@ temporary workspace and removes the temporary release package automatically. Use
 
 | System | Guided installation location |
 |:--|:--|
-| Windows | The current user's real `Desktop\Cleo.exe`, including a redirected or OneDrive Desktop |
+| Windows | The current user's real `Desktop\Cleo\Cleo.exe`, including a redirected or OneDrive Desktop |
 | macOS | `~/Applications/Cleo.app` |
 | Linux | `~/.local/share/cleo/Cleo`, plus a command and application-menu launcher |
 | Chromebook | Debian-managed `/usr/bin/cleo` and launcher files |
@@ -42,9 +42,10 @@ Open Terminal or Windows PowerShell and run:
 irm https://raw.githubusercontent.com/sahmsec/cleo-sqli/main/install/install-windows.ps1 | iex
 ```
 
-The installer detects x64 versus ARM64, downloads the matching ZIP, verifies it, places the one
-`Cleo.exe` file directly on the Desktop (not inside another folder), and opens Cleo. It does not
-create a shortcut. Rerun the same command to update.
+The installer detects x64 versus ARM64, downloads the matching ZIP, verifies it, installs the one
+`Cleo.exe` file under `Desktop\Cleo`, creates a Start-menu shortcut, and opens Cleo. Rerun the same
+command to update. It also safely migrates a recognized older installation from
+`%LOCALAPPDATA%\Programs\Cleo`.
 
 If policy blocks PowerShell scripts, do not change the policy. Use the manual ZIP method.
 
@@ -56,8 +57,6 @@ In **Settings → System → About**, check **System type**, then download the m
 - [Windows ARM64 ZIP](https://github.com/sahmsec/cleo-sqli/releases/latest/download/Cleo-Windows-arm64.zip)
 
 Extract the ZIP before opening `Cleo.exe`; do not run it from inside the ZIP.
-Windows 10 and Windows 11 both include ZIP extraction in File Explorer, so no third-party unzip
-program is required. Right-click the downloaded ZIP, select **Extract All**, and follow the prompt.
 
 The free classroom build is not commercially code-signed. Defender SmartScreen may ask you to
 confirm the first launch. Verify the source and checksum before selecting **More info → Run
@@ -65,7 +64,8 @@ anyway**, and follow organizational policy on managed devices.
 
 ### Remove Windows installation
 
-Close Cleo and delete `Desktop\Cleo.exe`. To remove the installer's per-user ownership record, run:
+Close Cleo, delete `Desktop\Cleo`, and remove the **Cleo** Start-menu shortcut. To remove the
+installer's per-user ownership record, run:
 
 ```powershell
 reg.exe delete 'HKCU\Software\sahmsec\Cleo\Installer' /f /reg:64
@@ -73,7 +73,9 @@ reg.exe delete 'HKCU\Software\sahmsec\Cleo\Installer' /f /reg:64
 
 ## macOS
 
-Cleo supports macOS 11 or later on Apple Silicon Macs. Intel Macs are not supported.
+Cleo supports macOS 14 or later on Apple Silicon and supported 64-bit Intel Macs, generally
+models introduced in 2018 or later. Some product families have different Apple compatibility
+cutoffs, so use **About This Mac** and **Software Update** to confirm that the Mac can run macOS 14.
 
 ### Guided terminal installation
 
@@ -111,9 +113,12 @@ curl -fL 'https://raw.githubusercontent.com/sahmsec/cleo-sqli/main/install/insta
 rm -f "$installer"
 ```
 
-Alternatively, download
-[`Cleo-macOS-Apple-Silicon.dmg`](https://github.com/sahmsec/cleo-sqli/releases/latest/download/Cleo-macOS-Apple-Silicon.dmg),
-open it, drag **Cleo** to **Applications**, and eject the disk image.
+Alternatively, download the matching DMG:
+
+- [Apple Silicon DMG](https://github.com/sahmsec/cleo-sqli/releases/latest/download/Cleo-macOS-Apple-Silicon.dmg)
+- [Intel DMG](https://github.com/sahmsec/cleo-sqli/releases/latest/download/Cleo-macOS-Intel.dmg)
+
+Open it, drag **Cleo** to **Applications**, and eject the disk image.
 
 To update, rerun the terminal installer or replace the app from the newest DMG. To remove it, close
 Cleo and move `~/Applications/Cleo.app` or `/Applications/Cleo.app` to the Trash.
@@ -183,6 +188,7 @@ macOS:
 ```bash
 shasum -a 256 Cleo-macOS-Apple-Silicon.dmg
 grep 'Cleo-macOS-Apple-Silicon.dmg' SHA256SUMS.txt
+# On an Intel Mac, use Cleo-macOS-Intel.dmg in both commands instead.
 ```
 
 Linux or Chromebook:
@@ -198,8 +204,9 @@ GitHub repository snapshots, not application downloads.
 
 Each release is built and checked on native GitHub-hosted x64 and ARM64 runners. Windows and Linux
 applications receive native launch smoke tests. Chromebook packages are inspected and installed in
-their matching Debian architecture. On Apple Silicon, CI verifies the DMG, app bundle, signature,
-ARM64 executable, installation/update path, and download-only path without launching the GUI.
+their matching Debian architecture. On both Intel and Apple Silicon Macs, CI verifies the matching
+DMG, app bundle, signature, executable architecture, installation/update path, and download-only
+path without launching the GUI.
 
 The workflows also verify exact package layouts, published checksums, repeatable updates, cleanup,
 and anonymous access to the public files.
@@ -207,7 +214,7 @@ and anonymous access to the public files.
 ## Common problems
 
 - **The installer says the architecture is unsupported:** use a supported 64-bit device. Windows
-  ARM64 requires Windows 11; Intel Macs are unsupported.
+  ARM64 requires Windows 11.
 - **Cleo seems missing on macOS:** the terminal installer uses `~/Applications/Cleo.app`. Rerun it
   to reveal the app, or run `open -R "$HOME/Applications/Cleo.app"`.
 - **macOS blocks Cleo:** approve the one-time launch under **Privacy & Security → Open Anyway**.

@@ -6,14 +6,14 @@ Installs the matching native 64-bit Windows release of Cleo for the current user
 .DESCRIPTION
 The installer detects the native Windows architecture, resolves one immutable
 release tag, downloads the Windows ZIP and its published SHA-256 manifest,
-verifies both the checksum and archive layout, and installs Cleo directly on
-the current user's Desktop by default, without requesting elevation or changing
-PowerShell security settings. Downloads use a private temporary directory that
-is removed after installation.
+verifies both the checksum and archive layout, and installs Cleo without
+requesting elevation or changing PowerShell security settings. Downloads use a
+private temporary directory that is removed after installation.
 
-Rerunning the installer replaces a Cleo executable recorded for the current
-user.
--Force is needed when the destination executable is unmarked.
+Rerunning the installer replaces a Cleo installation recorded for the current
+user. An exact four-file legacy Cleo installation is migrated automatically.
+-Force is needed when the destination contains unmarked or unexpected files,
+or when an existing Start Menu shortcut points somewhere else.
 
 .PARAMETER Version
 Release version to request in MAJOR.MINOR.PATCH form, with an optional leading
@@ -21,18 +21,21 @@ Release version to request in MAJOR.MINOR.PATCH form, with an optional leading
 install the latest release.
 
 .PARAMETER InstallDirectory
-Directory in which Cleo.exe is installed. The default is the current user's
-Windows Desktop, so Cleo.exe appears directly on the Desktop.
+Destination directory. The default is
+the current user's Windows Desktop\Cleo folder.
 
 .PARAMETER AssetDirectory
 Offline/test source directory containing the matching Cleo Windows ZIP and
 SHA256SUMS.txt. When supplied, no network request is made.
 
+.PARAMETER NoShortcut
+Do not create or update the current user's Start Menu shortcut.
+
 .PARAMETER NoLaunch
 Do not start Cleo after installation.
 
 .PARAMETER Force
-Allow replacement of an unrecognized destination executable.
+Allow replacement of an unrecognized destination directory or shortcut.
 
 .NOTES
 If Windows or an organization policy blocks PowerShell scripts, do not change
@@ -49,6 +52,9 @@ param(
 
     [Parameter()]
     [string] $AssetDirectory,
+
+    [Parameter()]
+    [switch] $NoShortcut,
 
     [Parameter()]
     [switch] $NoLaunch,
@@ -134,7 +140,17 @@ function Get-DefaultCleoInstallDirectory {
         -not (Test-Path -LiteralPath $desktopPath -PathType Container)) {
         throw "The Windows Desktop path is not a directory: $desktopPath"
     }
-    return $desktopPath
+    return Join-Path $desktopPath 'Cleo'
+}
+
+function Get-PreviousDefaultCleoInstallDirectory {
+    $localAppData = [Environment]::GetFolderPath(
+        [Environment+SpecialFolder]::LocalApplicationData
+    )
+    if ([string]::IsNullOrWhiteSpace($localAppData)) {
+        return $null
+    }
+    return Join-Path (Join-Path $localAppData 'Programs') 'Cleo'
 }
 
 function Get-NativeWindowsArchitecture {
@@ -800,7 +816,73 @@ function Restore-CleoOwnershipState {
     }
 }
 
-function Get-ExecutableDisposition {
+function Test-ExactInstallFiles {
+    param(
+        [Parameter(Mandatory = $true)]
+        [object[]] $Items,
+
+        [Parameter(Mandatory = $true)]
+        [string[]] $ExpectedNames
+    )
+
+    if ($Items.Count -ne $ExpectedNames.Count) {
+        return $false
+    }
+    $remainingNames = New-Object 'Collections.Generic.List[string]'
+    foreach ($expectedName in $ExpectedNames) {
+        $remainingNames.Add($expectedName)
+    }
+    foreach ($item in $Items) {
+        if ($item.PSIsContainer) {
+            return $false
+        }
+        $matchedIndex = -1
+        for ($index = 0; $index -lt $remainingNames.Count; $index++) {
+            if ([string]::Equals(
+                    $item.Name,
+                    $remainingNames[$index],
+                    [StringComparison]::OrdinalIgnoreCase)) {
+                $matchedIndex = $index
+                break
+            }
+        }
+        if ($matchedIndex -lt 0) {
+            return $false
+        }
+        $remainingNames.RemoveAt($matchedIndex)
+    }
+    return $remainingNames.Count -eq 0
+}
+
+function Test-ExactLegacyInstall {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string] $Path,
+
+        [Parameter(Mandatory = $true)]
+        [object[]] $Items
+    )
+
+    $legacyNames = @(
+        'Cleo.exe',
+        'av_libglesv2.dll',
+        'libHarfBuzzSharp.dll',
+        'libSkiaSharp.dll'
+    )
+    if (-not (Test-ExactInstallFiles -Items $Items -ExpectedNames $legacyNames)) {
+        return $false
+    }
+
+    try {
+        Assert-WindowsExecutableArchitecture -Path (Join-Path $Path $ExecutableName)
+        return $true
+    }
+    catch {
+        return $false
+    }
+}
+
+function Get-InstallDisposition {
     param(
         [Parameter(Mandatory = $true)]
         [string] $Path,
@@ -809,23 +891,97 @@ function Get-ExecutableDisposition {
         [bool] $AllowUnmarked
     )
 
-    if (Test-Path -LiteralPath $Path -PathType Container) {
-        throw "The Cleo executable destination points to a directory: $Path"
+    if (Test-Path -LiteralPath $Path -PathType Leaf) {
+        throw "InstallDirectory points to a file, not a directory: $Path"
     }
-    if (-not (Test-Path -LiteralPath $Path -PathType Leaf)) {
+    if (-not (Test-Path -LiteralPath $Path -PathType Container)) {
         return 'New'
     }
 
-    Assert-NoReparsePointTree -Path $Path -Description 'Cleo executable destination'
-    $ownershipState = Get-CleoOwnershipState
-    if (Test-CleoOwnershipState -State $ownershipState -InstallPath $Path) {
-        return 'Owned'
+    Assert-NoReparsePointTree -Path $Path -Description 'InstallDirectory'
+    $items = @(Get-ChildItem -LiteralPath $Path -Force)
+    if ($items.Count -eq 0) {
+        return 'Empty'
     }
 
+    $singleFileNames = @($ExecutableName)
+    if (Test-ExactInstallFiles -Items $items -ExpectedNames $singleFileNames) {
+        $ownershipState = Get-CleoOwnershipState
+        if (Test-CleoOwnershipState -State $ownershipState -InstallPath $Path) {
+            return 'Owned'
+        }
+    }
+
+    if (Test-ExactLegacyInstall -Path $Path -Items $items) {
+        return 'Legacy'
+    }
     if ($AllowUnmarked) {
         return 'Forced'
     }
     return 'Unmarked'
+}
+
+function Get-ShortcutTarget {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string] $ShortcutPath
+    )
+
+    $shell = $null
+    $shortcut = $null
+    try {
+        $shell = New-Object -ComObject WScript.Shell
+        $shortcut = $shell.CreateShortcut($ShortcutPath)
+        return [string] $shortcut.TargetPath
+    }
+    catch {
+        return $null
+    }
+    finally {
+        if ($null -ne $shortcut -and [Runtime.InteropServices.Marshal]::IsComObject($shortcut)) {
+            [void] [Runtime.InteropServices.Marshal]::FinalReleaseComObject($shortcut)
+        }
+        if ($null -ne $shell -and [Runtime.InteropServices.Marshal]::IsComObject($shell)) {
+            [void] [Runtime.InteropServices.Marshal]::FinalReleaseComObject($shell)
+        }
+    }
+}
+
+function New-CleoShortcut {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string] $ShortcutPath,
+
+        [Parameter(Mandatory = $true)]
+        [string] $ExecutablePath,
+
+        [Parameter(Mandatory = $true)]
+        [string] $WorkingDirectory
+    )
+
+    $shell = $null
+    $shortcut = $null
+    try {
+        $shell = New-Object -ComObject WScript.Shell
+        $shortcut = $shell.CreateShortcut($ShortcutPath)
+        $shortcut.TargetPath = $ExecutablePath
+        $shortcut.WorkingDirectory = $WorkingDirectory
+        $shortcut.IconLocation = "$ExecutablePath,0"
+        $shortcut.Description = 'Cleo authorized security testing tool'
+        $shortcut.Save()
+    }
+    finally {
+        if ($null -ne $shortcut -and [Runtime.InteropServices.Marshal]::IsComObject($shortcut)) {
+            [void] [Runtime.InteropServices.Marshal]::FinalReleaseComObject($shortcut)
+        }
+        if ($null -ne $shell -and [Runtime.InteropServices.Marshal]::IsComObject($shell)) {
+            [void] [Runtime.InteropServices.Marshal]::FinalReleaseComObject($shell)
+        }
+    }
+
+    if (-not (Test-Path -LiteralPath $ShortcutPath -PathType Leaf)) {
+        throw 'Windows did not create the Start Menu shortcut.'
+    }
 }
 
 function Remove-OwnedDirectory {
@@ -890,10 +1046,17 @@ $previousSecurityProtocol = $null
 $securityProtocolWasChanged = $false
 $temporaryRoot = $null
 $temporaryBase = $null
-$installPath = $null
-$stagingExecutable = $null
-$backupExecutable = $null
-$failedExecutable = $null
+$installParent = $null
+$stagingDirectory = $null
+$backupDirectory = $null
+$failedDirectory = $null
+$shortcutParent = $null
+$temporaryShortcut = $null
+$backupShortcut = $null
+$migrationSourcePath = $null
+$migrationSourceParent = $null
+$migrationBackupDirectory = $null
+$migrationExpectedDisposition = $null
 
 try {
     $ErrorActionPreference = 'Stop'
@@ -912,30 +1075,85 @@ try {
         throw 'Windows ARM64 requires Windows 11 (build 22000 or newer).'
     }
 
-    if ([string]::IsNullOrWhiteSpace($InstallDirectory)) {
+    $usingDefaultInstallDirectory = [string]::IsNullOrWhiteSpace($InstallDirectory)
+    if ($usingDefaultInstallDirectory) {
         $InstallDirectory = Get-DefaultCleoInstallDirectory
     }
     $installPath = Get-FileSystemPath -Path $InstallDirectory -Description 'InstallDirectory'
     $installRoot = [IO.Path]::GetPathRoot($installPath)
     if ([string]::IsNullOrWhiteSpace($installRoot) -or (Test-SamePath -First $installPath -Second $installRoot)) {
-        throw 'InstallDirectory must not be a drive or share root.'
+        throw 'InstallDirectory must be a dedicated application directory, not a drive or share root.'
     }
     $installParentInfo = [IO.Directory]::GetParent($installPath)
     if ($null -eq $installParentInfo) {
         throw 'InstallDirectory must have a parent directory.'
     }
+    $installParent = $installParentInfo.FullName
     $installedExecutable = Join-Path $installPath $ExecutableName
 
-    if ((Test-Path -LiteralPath $installPath) -and
-        -not (Test-Path -LiteralPath $installPath -PathType Container)) {
-        throw "InstallDirectory points to a file, not a directory: $installPath"
+    $initialDisposition = Get-InstallDisposition -Path $installPath -AllowUnmarked ([bool] $Force)
+    if ($initialDisposition -eq 'Unmarked') {
+        throw "The destination is not recorded as a Cleo installation for this user: $installPath. Ownership is stored at $OwnershipRegistryDisplayPath. Choose another InstallDirectory or rerun with -Force only if it is safe to replace that entire directory."
+    }
+    if ($initialDisposition -eq 'Legacy') {
+        Write-Host 'An exact legacy four-file Cleo installation was detected and will be migrated.'
     }
 
-    $initialDisposition = Get-ExecutableDisposition `
-        -Path $installedExecutable `
-        -AllowUnmarked ([bool] $Force)
-    if ($initialDisposition -eq 'Unmarked') {
-        throw "The destination file is not recorded as a Cleo installation for this user: $installedExecutable. Ownership is stored at $OwnershipRegistryDisplayPath. Choose another InstallDirectory or rerun with -Force only if it is safe to replace that file."
+    # Releases before the Desktop-folder installer used Local AppData. Migrate
+    # only a precisely recognized Cleo directory, and only when the new Desktop
+    # destination is new or empty. Unrecognized data is never removed.
+    if ($usingDefaultInstallDirectory -and
+        ($initialDisposition -eq 'New' -or $initialDisposition -eq 'Empty')) {
+        $previousDefaultPath = Get-PreviousDefaultCleoInstallDirectory
+        if (-not [string]::IsNullOrWhiteSpace($previousDefaultPath)) {
+            $previousDefaultPath = [IO.Path]::GetFullPath($previousDefaultPath)
+            if (-not (Test-SamePath -First $previousDefaultPath -Second $installPath) -and
+                (Test-Path -LiteralPath $previousDefaultPath -PathType Container)) {
+                $previousDisposition = Get-InstallDisposition `
+                    -Path $previousDefaultPath `
+                    -AllowUnmarked $false
+                if ($previousDisposition -eq 'Owned' -or $previousDisposition -eq 'Legacy') {
+                    $migrationSourcePath = $previousDefaultPath
+                    $migrationSourceParent = [IO.Directory]::GetParent($previousDefaultPath).FullName
+                    $migrationExpectedDisposition = $previousDisposition
+                    Write-Host "A previous Cleo installation will be moved from $migrationSourcePath to $installPath."
+                }
+            }
+        }
+    }
+
+    $shortcutPath = $null
+    if (-not $NoShortcut) {
+        $shortcutParent = [Environment]::GetFolderPath([Environment+SpecialFolder]::Programs)
+        if ([string]::IsNullOrWhiteSpace($shortcutParent)) {
+            throw 'Windows did not provide a Start Menu Programs directory for the current user.'
+        }
+        $shortcutParent = [IO.Path]::GetFullPath($shortcutParent)
+        $shortcutPath = Join-Path $shortcutParent 'Cleo.lnk'
+        if (Test-Path -LiteralPath $shortcutPath) {
+            Assert-NoReparsePointTree -Path $shortcutPath -Description 'Cleo Start Menu shortcut'
+            if (-not (Test-Path -LiteralPath $shortcutPath -PathType Leaf)) {
+                throw "The Start Menu shortcut path is not a file: $shortcutPath"
+            }
+            $shortcutTarget = Get-ShortcutTarget -ShortcutPath $shortcutPath
+            $shortcutMatchesDestination = $false
+            $shortcutMatchesMigrationSource = $false
+            if (-not [string]::IsNullOrWhiteSpace($shortcutTarget)) {
+                $shortcutMatchesDestination = Test-SamePath `
+                    -First $shortcutTarget `
+                    -Second $installedExecutable
+                if (-not [string]::IsNullOrWhiteSpace($migrationSourcePath)) {
+                    $shortcutMatchesMigrationSource = Test-SamePath `
+                        -First $shortcutTarget `
+                        -Second (Join-Path $migrationSourcePath $ExecutableName)
+                }
+            }
+            if (-not $shortcutMatchesDestination -and
+                -not $shortcutMatchesMigrationSource -and
+                -not $Force) {
+                throw "An existing Cleo Start Menu shortcut points somewhere else. Rerun with -NoShortcut, or use -Force only if that shortcut may be replaced."
+            }
+        }
     }
 
     $temporaryBase = [IO.Path]::GetFullPath([IO.Path]::GetTempPath())
@@ -1006,41 +1224,87 @@ try {
         -ExpectedArchitecture $nativeArchitecture
     Write-Host 'Checksum and Windows package layout verified.'
 
-    [void] [IO.Directory]::CreateDirectory($installPath)
+    [void] [IO.Directory]::CreateDirectory($installParent)
     $transactionId = [Guid]::NewGuid().ToString('N')
-    $stagingExecutable = Join-Path $installPath ('.cleo-install-' + $transactionId + '.exe')
-    $backupExecutable = Join-Path $installPath ('.cleo-backup-' + $transactionId + '.exe')
-    $failedExecutable = Join-Path $installPath ('.cleo-failed-' + $transactionId + '.exe')
-    if ((Test-Path -LiteralPath $stagingExecutable) -or
-        (Test-Path -LiteralPath $backupExecutable) -or
-        (Test-Path -LiteralPath $failedExecutable)) {
+    $stagingDirectory = Join-Path $installParent ('.cleo-install-' + $transactionId)
+    $backupDirectory = Join-Path $installParent ('.cleo-backup-' + $transactionId)
+    $failedDirectory = Join-Path $installParent ('.cleo-failed-' + $transactionId)
+    if (-not [string]::IsNullOrWhiteSpace($migrationSourcePath)) {
+        $migrationBackupDirectory = Join-Path `
+            $migrationSourceParent `
+            ('.cleo-migration-backup-' + $transactionId)
+    }
+    if ((Test-Path -LiteralPath $stagingDirectory) -or
+        (Test-Path -LiteralPath $backupDirectory) -or
+        (Test-Path -LiteralPath $failedDirectory) -or
+        (-not [string]::IsNullOrWhiteSpace($migrationBackupDirectory) -and
+            (Test-Path -LiteralPath $migrationBackupDirectory))) {
         throw 'A unique installation transaction path unexpectedly already exists.'
     }
-    Copy-Item -LiteralPath $extractedExecutable -Destination $stagingExecutable
+    [void] [IO.Directory]::CreateDirectory($stagingDirectory)
+    Copy-Item -LiteralPath $extractedExecutable -Destination (Join-Path $stagingDirectory $ExecutableName)
 
-    $originalExecutableMoved = $false
-    $newExecutableMoved = $false
+    $temporaryShortcut = $null
+    $backupShortcut = $null
+    if (-not $NoShortcut) {
+        [void] [IO.Directory]::CreateDirectory($shortcutParent)
+        $temporaryShortcut = Join-Path $shortcutParent ('Cleo.install-' + $transactionId + '.lnk')
+        $backupShortcut = Join-Path $shortcutParent ('Cleo.backup-' + $transactionId + '.lnk')
+        if ((Test-Path -LiteralPath $temporaryShortcut) -or (Test-Path -LiteralPath $backupShortcut)) {
+            throw 'A unique shortcut transaction path unexpectedly already exists.'
+        }
+        New-CleoShortcut `
+            -ShortcutPath $temporaryShortcut `
+            -ExecutablePath $installedExecutable `
+            -WorkingDirectory $installPath
+    }
+
+    $originalInstallMoved = $false
+    $newInstallMoved = $false
+    $originalShortcutMoved = $false
+    $newShortcutMoved = $false
+    $migrationSourceMoved = $false
     $ownershipWriteAttempted = $false
     $previousOwnershipState = Get-CleoOwnershipState
 
-    # Re-read the destination file and current-user ownership record at the
-    # last possible point before an existing executable can be renamed.
-    $finalDisposition = Get-ExecutableDisposition `
-        -Path $installedExecutable `
-        -AllowUnmarked ([bool] $Force)
+    # Re-read both the directory tree and the current-user ownership record at
+    # the last possible point before an existing directory can be renamed.
+    $finalDisposition = Get-InstallDisposition -Path $installPath -AllowUnmarked ([bool] $Force)
     if ($finalDisposition -ne $initialDisposition) {
-        throw "The Cleo executable destination changed during installation. Nothing was replaced: $installedExecutable"
+        throw "InstallDirectory changed during installation. Nothing was replaced: $installPath"
     }
-    try {
-        if (Test-Path -LiteralPath $installedExecutable -PathType Leaf) {
-            [IO.File]::Move($installedExecutable, $backupExecutable)
-            $originalExecutableMoved = $true
+    if (-not [string]::IsNullOrWhiteSpace($migrationSourcePath)) {
+        $finalMigrationDisposition = Get-InstallDisposition `
+            -Path $migrationSourcePath `
+            -AllowUnmarked $false
+        if ($finalMigrationDisposition -ne $migrationExpectedDisposition) {
+            throw "The previous Cleo installation changed during installation. Nothing was replaced: $migrationSourcePath"
         }
-        [IO.File]::Move($stagingExecutable, $installedExecutable)
-        $newExecutableMoved = $true
+    }
+
+    try {
+        if (Test-Path -LiteralPath $installPath -PathType Container) {
+            [IO.Directory]::Move($installPath, $backupDirectory)
+            $originalInstallMoved = $true
+        }
+        if (-not [string]::IsNullOrWhiteSpace($migrationSourcePath)) {
+            [IO.Directory]::Move($migrationSourcePath, $migrationBackupDirectory)
+            $migrationSourceMoved = $true
+        }
+        [IO.Directory]::Move($stagingDirectory, $installPath)
+        $newInstallMoved = $true
+
+        if (-not $NoShortcut) {
+            if (Test-Path -LiteralPath $shortcutPath -PathType Leaf) {
+                [IO.File]::Move($shortcutPath, $backupShortcut)
+                $originalShortcutMoved = $true
+            }
+            [IO.File]::Move($temporaryShortcut, $shortcutPath)
+            $newShortcutMoved = $true
+        }
 
         $ownershipWriteAttempted = $true
-        Set-CleoOwnershipState -InstallPath $installedExecutable
+        Set-CleoOwnershipState -InstallPath $installPath
     }
     catch {
         $transactionError = $_
@@ -1056,11 +1320,23 @@ try {
         }
 
         try {
-            if ($newExecutableMoved -and (Test-Path -LiteralPath $installedExecutable -PathType Leaf)) {
-                [IO.File]::Move($installedExecutable, $failedExecutable)
+            if ($newShortcutMoved -and (Test-Path -LiteralPath $shortcutPath -PathType Leaf)) {
+                Remove-Item -LiteralPath $shortcutPath -Force
             }
-            if ($originalExecutableMoved -and (Test-Path -LiteralPath $backupExecutable -PathType Leaf)) {
-                [IO.File]::Move($backupExecutable, $installedExecutable)
+            if ($originalShortcutMoved -and (Test-Path -LiteralPath $backupShortcut -PathType Leaf)) {
+                [IO.File]::Move($backupShortcut, $shortcutPath)
+            }
+        }
+        catch {
+            $rollbackProblems += "shortcut rollback: $($_.Exception.Message)"
+        }
+
+        try {
+            if ($newInstallMoved -and (Test-Path -LiteralPath $installPath -PathType Container)) {
+                [IO.Directory]::Move($installPath, $failedDirectory)
+            }
+            if ($originalInstallMoved -and (Test-Path -LiteralPath $backupDirectory -PathType Container)) {
+                [IO.Directory]::Move($backupDirectory, $installPath)
             }
         }
         catch {
@@ -1068,8 +1344,18 @@ try {
         }
 
         try {
-            if (Test-Path -LiteralPath $failedExecutable) {
-                Remove-OwnedFile -Path $failedExecutable -ExpectedParent $installPath -ExpectedPrefix '.cleo-failed-'
+            if ($migrationSourceMoved -and
+                (Test-Path -LiteralPath $migrationBackupDirectory -PathType Container)) {
+                [IO.Directory]::Move($migrationBackupDirectory, $migrationSourcePath)
+            }
+        }
+        catch {
+            $rollbackProblems += "previous-installation rollback: $($_.Exception.Message)"
+        }
+
+        try {
+            if (Test-Path -LiteralPath $failedDirectory) {
+                Remove-OwnedDirectory -Path $failedDirectory -ExpectedParent $installParent -ExpectedPrefix '.cleo-failed-'
             }
         }
         catch {
@@ -1083,15 +1369,38 @@ try {
         throw "Cleo was not installed: $($transactionError.Exception.Message).$rollbackSuffix"
     }
 
-    if ($originalExecutableMoved -and (Test-Path -LiteralPath $backupExecutable)) {
+    if ($originalInstallMoved -and (Test-Path -LiteralPath $backupDirectory)) {
         try {
-            Remove-OwnedFile -Path $backupExecutable -ExpectedParent $installPath -ExpectedPrefix '.cleo-backup-'
+            Remove-OwnedDirectory -Path $backupDirectory -ExpectedParent $installParent -ExpectedPrefix '.cleo-backup-'
         }
         catch {
-            Write-Warning "Cleo was installed, but the previous version could not be removed from $backupExecutable : $($_.Exception.Message)"
+            Write-Warning "Cleo was installed, but the previous version could not be removed from $backupDirectory : $($_.Exception.Message)"
         }
     }
+    if ($originalShortcutMoved -and (Test-Path -LiteralPath $backupShortcut)) {
+        try {
+            Remove-OwnedFile -Path $backupShortcut -ExpectedParent $shortcutParent -ExpectedPrefix 'Cleo.backup-'
+        }
+        catch {
+            Write-Warning "Cleo was installed, but the previous shortcut backup could not be removed: $($_.Exception.Message)"
+        }
+    }
+    if ($migrationSourceMoved -and (Test-Path -LiteralPath $migrationBackupDirectory)) {
+        try {
+            Remove-OwnedDirectory `
+                -Path $migrationBackupDirectory `
+                -ExpectedParent $migrationSourceParent `
+                -ExpectedPrefix '.cleo-migration-backup-'
+        }
+        catch {
+            Write-Warning "Cleo was moved to the Desktop, but the previous installation backup could not be removed from $migrationBackupDirectory : $($_.Exception.Message)"
+        }
+    }
+
     Write-Host "Cleo $releaseTag was installed at $installedExecutable"
+    if (-not $NoShortcut) {
+        Write-Host 'A Cleo shortcut was added to your Start Menu.'
+    }
 
     if (-not $NoLaunch) {
         try {
@@ -1099,7 +1408,7 @@ try {
         }
         catch {
             Write-Warning "Cleo was installed successfully but could not be started automatically: $($_.Exception.Message)"
-            Write-Host "Run it directly from the Desktop: $installedExecutable"
+            Write-Host "Start it from the Start Menu or run: $installedExecutable"
         }
     }
 }
@@ -1108,13 +1417,23 @@ finally {
         [Net.ServicePointManager]::SecurityProtocol = $previousSecurityProtocol
     }
 
-    if (-not [string]::IsNullOrWhiteSpace($stagingExecutable) -and
-        -not [string]::IsNullOrWhiteSpace($installPath)) {
+    if (-not [string]::IsNullOrWhiteSpace($temporaryShortcut) -and
+        -not [string]::IsNullOrWhiteSpace($shortcutParent)) {
         try {
-            Remove-OwnedFile -Path $stagingExecutable -ExpectedParent $installPath -ExpectedPrefix '.cleo-install-'
+            Remove-OwnedFile -Path $temporaryShortcut -ExpectedParent $shortcutParent -ExpectedPrefix 'Cleo.install-'
         }
         catch {
-            Write-Warning "Could not clean up staging executable $stagingExecutable : $($_.Exception.Message)"
+            Write-Warning "Could not clean up temporary shortcut $temporaryShortcut : $($_.Exception.Message)"
+        }
+    }
+
+    if (-not [string]::IsNullOrWhiteSpace($stagingDirectory) -and
+        -not [string]::IsNullOrWhiteSpace($installParent)) {
+        try {
+            Remove-OwnedDirectory -Path $stagingDirectory -ExpectedParent $installParent -ExpectedPrefix '.cleo-install-'
+        }
+        catch {
+            Write-Warning "Could not clean up staging directory $stagingDirectory : $($_.Exception.Message)"
         }
     }
 
