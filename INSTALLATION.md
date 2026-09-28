@@ -21,6 +21,23 @@ You can run a guided command from any terminal folder. A normal installation use
 temporary workspace and removes the temporary release package automatically. Use the explicit
 `--download-only` option when you want to keep a verified package without installing it.
 
+## Updates inside Cleo
+
+Once you have a release that includes the updater, Cleo checks for a newer public release when it
+opens. A red update icon in the top-right corner appears when one is available. Click it to download
+and verify the package for your device, then select **Restart to update** when you have finished your
+current work. You can keep using the installed version and update later; an internet connection is
+only needed for the check and download.
+
+The updater replaces the Cleo copy you opened, including a copy you extracted or moved yourself.
+Your operating system may ask for administrator permission if that location is protected. File-based
+updates keep a backup and attempt to restore it if replacement fails. On a Chromebook, a Debian-managed
+installation uses the DEB package and the Linux package manager; it may require administrator
+authorization. If an update fails, Cleo shows the reason when it reopens.
+
+An older Cleo copy without the updater cannot show this notice. Install the first updater-enabled
+release once using the instructions below; later releases can then notify you in the app.
+
 | System | Guided installation location |
 |:--|:--|
 | Windows | The current user's real `Desktop\Cleo.exe`, including a redirected or OneDrive Desktop |
